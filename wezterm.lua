@@ -157,6 +157,7 @@ config.keys = {
     { mods = "LEADER",       key = "n", action = act.ActivateTabRelative(1) },
     -- List/switch mux sessions (like tmux ls)
     { mods = "LEADER", key = "w", action = wezterm.action_callback(function(window, pane)
+        window:perform_action(act.AttachDomain 'mux', pane)
         local mux = wezterm.mux
         local ok, workspaces = pcall(mux.list_workspaces)
         if ok and workspaces and #workspaces > 0 then
@@ -268,6 +269,7 @@ config.keys = {
         description = "Session name (blank = default mux session):",
         action = wezterm.action_callback(function(window, pane, line)
             if line and #line > 0 then
+                window:perform_action(act.AttachDomain 'mux', pane)
                 local mux = wezterm.mux
                 local exists = false
                 local ok, workspaces = pcall(mux.list_workspaces)
@@ -303,6 +305,7 @@ config.keys = {
     }},
     -- Kill/delete a mux session by selecting from list
     { mods = "LEADER", key = "'", action = wezterm.action_callback(function(window, pane)
+        window:perform_action(act.AttachDomain 'mux', pane)
         local mux = wezterm.mux
         local ok, workspaces = pcall(mux.list_workspaces)
         if ok and workspaces and #workspaces > 0 then
