@@ -303,18 +303,32 @@ config.keys = {
     }},
     -- Detach from mux session (tmux: detach)
     { mods = "LEADER", key = "d", action = act.DetachDomain { DomainName = "mux" } },
-    -- Kill/delete a mux session by name (tmux: kill-session -t <name>)
-    { mods = "LEADER|SHIFT", key = "x", action = act.PromptInputLine {
-        description = "Kill session name:",
-        action = wezterm.action_callback(function(window, pane, line)
-            if line and #line > 0 then
-                local mux = wezterm.mux
-                pcall(function()
-                    mux.kill_workspace(line)
-                end)
+    -- Kill/delete a mux session by selecting from list (tmux: kill-session)
+    { mods = "LEADER|SHIFT", key = "x", action = wezterm.action_callback(function(window, pane)
+        local mux = wezterm.mux
+        local ok, workspaces = pcall(mux.list_workspaces)
+        if ok and workspaces and #workspaces > 0 then
+            local choices = {}
+            for _, ws in ipairs(workspaces) do
+                table.insert(choices, { label = ws.name })
             end
-        end),
-    }},
+            window:perform_action(
+                act.InputSelector {
+                    title = "Kill Session",
+                    alphabet = "abcdefghijklmnopqrstuvwxyz",
+                    choices = choices,
+                    action = wezterm.action_callback(function(window, pane, id, label)
+                        if label then
+                            pcall(function()
+                                mux.kill_workspace(label)
+                            end)
+                        end
+                    end),
+                },
+                pane
+            )
+        end
+    end)},
 }
 -- Tabs 1-9
 for i = 1, 9 do
