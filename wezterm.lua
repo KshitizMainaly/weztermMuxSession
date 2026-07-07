@@ -304,7 +304,7 @@ config.keys = {
     -- Detach from mux session (tmux: detach)
     { mods = "LEADER", key = "d", action = act.DetachDomain { DomainName = "mux" } },
     -- Kill/delete a mux session by selecting from list (tmux: kill-session)
-    { mods = "LEADER|SHIFT", key = "x", action = wezterm.action_callback(function(window, pane)
+    { mods = "LEADER|SHIFT", key = "X", action = wezterm.action_callback(function(window, pane)
         local mux = wezterm.mux
         local ok, workspaces = pcall(mux.list_workspaces)
         if ok and workspaces and #workspaces > 0 then
