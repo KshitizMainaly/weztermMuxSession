@@ -30,6 +30,18 @@ config.unix_domains = {
   },
 }
 
+-- Silently connect to mux daemon at startup so Leader+w can list sessions
+-- and Leader+a can detect existing workspaces (prevents extra tab on re-attach)
+wezterm.on("gui-startup", function(cmd)
+    local mux = wezterm.mux
+    local ok, domain = pcall(function()
+        return mux.get_domain("mux")
+    end)
+    if ok and domain then
+        domain:attach()
+    end
+end)
+
 -- Leader+a = attach/create named persistent session (tmux "new -A -s")
 -- Leader+d = detach (tmux "detach")
 -- Leader+w = list/switch sessions (tmux "ls")
@@ -353,8 +365,13 @@ config.status_update_interval = 1000
 wezterm.on("update-right-status", function(window, pane)
     local date = wezterm.strftime("%Y-%m-%d %H:%M")
     local hostname = wezterm.hostname()
+    local workspace = window:active_workspace()
+    local status = ""
+    if workspace and #workspace > 0 then
+        status = workspace .. " | "
+    end
     window:set_right_status(wezterm.format({
-        { Text = hostname .. " | " .. date },
+        { Text = status .. hostname .. " | " .. date },
     }))
 end)
 -- =========================
