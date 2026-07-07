@@ -143,7 +143,38 @@ config.keys = {
     { mods = "LEADER",       key = "x", action = act.CloseCurrentPane { confirm = true } },
     { mods = "LEADER",       key = "b", action = act.ActivateTabRelative(-1) },
     { mods = "LEADER",       key = "n", action = act.ActivateTabRelative(1) },
-    { mods = "LEADER",       key = "w", action = act.ShowLauncherArgs { flags = "WORKSPACES" } },
+    -- List/switch mux sessions (like tmux ls)
+    { mods = "LEADER", key = "w", action = wezterm.action_callback(function(window, pane)
+        local mux = wezterm.mux
+        local ok, workspaces = pcall(mux.list_workspaces)
+        if ok and workspaces and #workspaces > 0 then
+            local choices = {}
+            for _, ws in ipairs(workspaces) do
+                table.insert(choices, { label = ws.name })
+            end
+            window:perform_action(
+                act.InputSelector {
+                    title = "Mux Sessions",
+                    alphabet = "abcdefghijklmnopqrstuvwxyz",
+                    choices = choices,
+                    action = wezterm.action_callback(function(window, pane, id, label)
+                        if label then
+                            window:perform_action(
+                                act.SwitchToWorkspace { name = label },
+                                pane
+                            )
+                        end
+                    end),
+                },
+                pane
+            )
+        else
+            window:perform_action(
+                act.ShowLauncherArgs { flags = "WORKSPACES" },
+                pane
+            )
+        end
+    end)},
     -- Close all tabs in CURRENT workspace (with prompt)
     { mods = "LEADER", key = "q", action = act.PromptInputLine {
         description = "Close all tabs in this workspace? (y/n)",
@@ -225,15 +256,34 @@ config.keys = {
         description = "Session name (blank = default mux session):",
         action = wezterm.action_callback(function(window, pane, line)
             if line and #line > 0 then
-                window:perform_action(
-                    act.SwitchToWorkspace {
-                        name = line,
-                        spawn = {
-                            domain = { DomainName = "mux" },
+                local mux = wezterm.mux
+                local exists = false
+                local ok, workspaces = pcall(mux.list_workspaces)
+                if ok and workspaces then
+                    for _, ws in ipairs(workspaces) do
+                        if ws.name == line then
+                            exists = true
+                            break
+                        end
+                    end
+                end
+
+                if exists then
+                    window:perform_action(
+                        act.SwitchToWorkspace { name = line },
+                        pane
+                    )
+                else
+                    window:perform_action(
+                        act.SwitchToWorkspace {
+                            name = line,
+                            spawn = {
+                                domain = { DomainName = "mux" },
+                            },
                         },
-                    },
-                    pane
-                )
+                        pane
+                    )
+                end
             else
                 window:perform_action(act.AttachDomain 'mux', pane)
             end
