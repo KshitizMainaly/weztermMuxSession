@@ -332,15 +332,12 @@ config.keys = {
         if #choices > 0 then
             window:perform_action(
                 act.InputSelector {
-                    title = "Kill Session",
+                    title = "Remove Session",
                     alphabet = "abcdefghijklmnopqrstuvwxyz",
                     choices = choices,
                     action = wezterm.action_callback(function(window, pane, id, label)
                         if label then
                             remove_session(label)
-                            pcall(function()
-                                wezterm.mux.kill_workspace(label)
-                            end)
                         end
                     end),
                 },
