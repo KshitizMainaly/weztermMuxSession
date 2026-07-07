@@ -302,23 +302,32 @@ config.keys = {
         description = "Session name (blank = default mux session):",
         action = wezterm.action_callback(function(window, pane, line)
             if line and #line > 0 then
+                local sessions = read_sessions()
+                local exists = sessions[line]
                 add_session(line)
-                window:perform_action(
-                    act.SwitchToWorkspace {
-                        name = line,
-                        spawn = {
-                            domain = { DomainName = "mux" },
+                if exists then
+                    window:perform_action(
+                        act.SwitchToWorkspace { name = line },
+                        pane
+                    )
+                else
+                    window:perform_action(
+                        act.SwitchToWorkspace {
+                            name = line,
+                            spawn = {
+                                domain = { DomainName = "mux" },
+                            },
                         },
-                    },
-                    pane
-                )
+                        pane
+                    )
+                end
             else
                 window:perform_action(act.AttachDomain 'mux', pane)
             end
         end),
     }},
     -- Kill/delete a mux session by selecting from list
-    { mods = "LEADER", key = "'", action = wezterm.action_callback(function(window, pane)
+    { mods = "LEADER", key = "g", action = wezterm.action_callback(function(window, pane)
         local choices = get_session_list()
         if #choices > 0 then
             window:perform_action(
