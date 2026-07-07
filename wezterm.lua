@@ -301,10 +301,8 @@ config.keys = {
             end
         end),
     }},
-    -- Detach from mux session (tmux: detach)
-    { mods = "LEADER", key = "d", action = act.DetachDomain { DomainName = "mux" } },
-    -- Kill/delete a mux session by selecting from list (tmux: kill-session)
-    { mods = "LEADER|SHIFT", key = "X", action = wezterm.action_callback(function(window, pane)
+    -- Kill/delete a mux session by selecting from list
+    { mods = "LEADER", key = "'", action = wezterm.action_callback(function(window, pane)
         local mux = wezterm.mux
         local ok, workspaces = pcall(mux.list_workspaces)
         if ok and workspaces and #workspaces > 0 then
@@ -329,6 +327,8 @@ config.keys = {
             )
         end
     end)},
+    -- Detach from mux session (tmux: detach)
+    { mods = "LEADER", key = "d", action = act.DetachDomain { DomainName = "mux" } },
 }
 -- Tabs 1-9
 for i = 1, 9 do
