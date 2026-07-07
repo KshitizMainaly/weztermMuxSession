@@ -345,8 +345,14 @@ config.keys = {
             )
         end
     end)},
-    -- Detach from mux session (tmux: detach)
-    { mods = "LEADER", key = "d", action = act.DetachDomain { DomainName = "mux" } },
+    -- Close mux tab (session keeps running on server, like tmux detach)
+    { mods = "LEADER", key = "d", action = wezterm.action_callback(function(window, pane)
+        local tab_count = #window:mux_window():tabs()
+        if tab_count <= 1 then
+            window:perform_action(act.SpawnTab("DefaultDomain"), pane)
+        end
+        window:perform_action(act.CloseCurrentTab { confirm = false }, pane)
+    end)},
 }
 -- Tabs 1-9
 for i = 1, 9 do
@@ -421,17 +427,15 @@ end)
 -- =========================
 -- Tab Title Formatting (process + cwd)
 -- =========================
-wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_width)
+wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     local pane = tab.active_pane
     local title = pane.title
     if title and #title > 0 then
         title = title
     else
         title = pane.foreground_process_name
-        -- Extract just the filename from the path
         title = title:match("([^/\\]+)$") or title
     end
-    -- Truncate if too long
     if #title > 20 then
         title = title:sub(1, 18) .. ".."
     end
