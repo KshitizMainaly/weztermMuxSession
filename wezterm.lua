@@ -207,10 +207,10 @@ config.keys = {
     { mods = "LEADER",       key = "j", action = act.ActivatePaneDirection("Down") },
     { mods = "LEADER",       key = "k", action = act.ActivatePaneDirection("Up") },
     { mods = "LEADER",       key = "l", action = act.ActivatePaneDirection("Right") },
-    { mods = "LEADER|SHIFT", key = "h", action = act.AdjustPaneSize({ "Left", 10 }) },
-    { mods = "LEADER|SHIFT", key = "l", action = act.AdjustPaneSize({ "Right", 10 }) },
-    { mods = "LEADER|SHIFT", key = "j", action = act.AdjustPaneSize({ "Down", 10 }) },
-    { mods = "LEADER|SHIFT", key = "k", action = act.AdjustPaneSize({ "Up", 10 }) },
+    { mods = "LEADER|SHIFT", key = "h", action = act.AdjustPaneSize({ "Left", 22 }) },
+    { mods = "LEADER|SHIFT", key = "l", action = act.AdjustPaneSize({ "Right", 22 }) },
+    { mods = "LEADER|SHIFT", key = "j", action = act.AdjustPaneSize({ "Down", 22 }) },
+    { mods = "LEADER|SHIFT", key = "k", action = act.AdjustPaneSize({ "Up", 22 }) },
     { mods = "CTRL|SHIFT",   key = "R", action = act.ReloadConfiguration },
     { mods = "CTRL|SHIFT",   key = "C", action = act.CopyTo("Clipboard") },
     { mods = "CTRL|SHIFT",   key = "V", action = act.PasteFrom("Clipboard") },
@@ -303,6 +303,18 @@ config.keys = {
     }},
     -- Detach from mux session (tmux: detach)
     { mods = "LEADER", key = "d", action = act.DetachDomain { DomainName = "mux" } },
+    -- Kill/delete a mux session by name (tmux: kill-session -t <name>)
+    { mods = "LEADER|SHIFT", key = "x", action = act.PromptInputLine {
+        description = "Kill session name:",
+        action = wezterm.action_callback(function(window, pane, line)
+            if line and #line > 0 then
+                local mux = wezterm.mux
+                pcall(function()
+                    mux.kill_workspace(line)
+                end)
+            end
+        end),
+    }},
 }
 -- Tabs 1-9
 for i = 1, 9 do
