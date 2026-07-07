@@ -42,7 +42,7 @@ end
 -- =========================
 -- Performance & Memory
 -- =========================
-config.front_end = "OpenGL"                    -- stable for TUI apps (Helix, etc.)
+config.front_end = "WebGpu"
 config.webgpu_power_preference = "HighPerformance" -- dedicated GTX 1650
 config.max_fps = 120                          -- buttery smooth (matches high refresh monitors)
 config.animation_fps = 30                     -- smooth but stable for TUI redraws
@@ -67,18 +67,6 @@ config.unix_domains = {
     name = 'mux',  -- renamed from 'local'
   },
 }
-
--- Silently connect to mux daemon at startup so Leader+w can list sessions
--- and Leader+a can detect existing workspaces (prevents extra tab on re-attach)
-wezterm.on("gui-startup", function(cmd)
-    local mux = wezterm.mux
-    local ok, domain = pcall(function()
-        return mux.get_domain("mux")
-    end)
-    if ok and domain then
-        domain:attach()
-    end
-end)
 
 -- Leader+a = attach/create named persistent session (tmux "new -A -s")
 -- Leader+d = detach (tmux "detach")
