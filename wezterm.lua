@@ -157,14 +157,21 @@ config.keys = {
     { mods = "LEADER",       key = "n", action = act.ActivateTabRelative(1) },
     -- List/switch mux sessions (like tmux ls)
     { mods = "LEADER", key = "w", action = wezterm.action_callback(function(window, pane)
-        window:perform_action(act.AttachDomain 'mux', pane)
-        local mux = wezterm.mux
-        local ok, workspaces = pcall(mux.list_workspaces)
-        if ok and workspaces and #workspaces > 0 then
-            local choices = {}
-            for _, ws in ipairs(workspaces) do
-                table.insert(choices, { label = ws.name })
+        local handle = io.popen("wezterm cli list --prefer-mux 2>nul")
+        local result = handle:read("*a")
+        handle:close()
+        local seen = {}
+        local choices = {}
+        for line in result:gmatch("[^\r\n]+") do
+            if not line:match("^WINID") then
+                local ws = line:match("^%s*%d+%s+%d+%s+%d+%s+(%S+)")
+                if ws and not seen[ws] then
+                    seen[ws] = true
+                    table.insert(choices, { label = ws })
+                end
             end
+        end
+        if #choices > 0 then
             window:perform_action(
                 act.InputSelector {
                     title = "Mux Sessions",
@@ -269,19 +276,19 @@ config.keys = {
         description = "Session name (blank = default mux session):",
         action = wezterm.action_callback(function(window, pane, line)
             if line and #line > 0 then
-                window:perform_action(act.AttachDomain 'mux', pane)
-                local mux = wezterm.mux
+                local handle = io.popen("wezterm cli list --prefer-mux 2>nul")
+                local result = handle:read("*a")
+                handle:close()
                 local exists = false
-                local ok, workspaces = pcall(mux.list_workspaces)
-                if ok and workspaces then
-                    for _, ws in ipairs(workspaces) do
-                        if ws.name == line then
+                for l in result:gmatch("[^\r\n]+") do
+                    if not l:match("^WINID") then
+                        local ws = l:match("^%s*%d+%s+%d+%s+%d+%s+(%S+)")
+                        if ws and ws == line then
                             exists = true
                             break
                         end
                     end
                 end
-
                 if exists then
                     window:perform_action(
                         act.SwitchToWorkspace { name = line },
@@ -305,14 +312,21 @@ config.keys = {
     }},
     -- Kill/delete a mux session by selecting from list
     { mods = "LEADER", key = "'", action = wezterm.action_callback(function(window, pane)
-        window:perform_action(act.AttachDomain 'mux', pane)
-        local mux = wezterm.mux
-        local ok, workspaces = pcall(mux.list_workspaces)
-        if ok and workspaces and #workspaces > 0 then
-            local choices = {}
-            for _, ws in ipairs(workspaces) do
-                table.insert(choices, { label = ws.name })
+        local handle = io.popen("wezterm cli list --prefer-mux 2>nul")
+        local result = handle:read("*a")
+        handle:close()
+        local seen = {}
+        local choices = {}
+        for line in result:gmatch("[^\r\n]+") do
+            if not line:match("^WINID") then
+                local ws = line:match("^%s*%d+%s+%d+%s+%d+%s+(%S+)")
+                if ws and not seen[ws] then
+                    seen[ws] = true
+                    table.insert(choices, { label = ws })
+                end
             end
+        end
+        if #choices > 0 then
             window:perform_action(
                 act.InputSelector {
                     title = "Kill Session",
@@ -321,7 +335,7 @@ config.keys = {
                     action = wezterm.action_callback(function(window, pane, id, label)
                         if label then
                             pcall(function()
-                                mux.kill_workspace(label)
+                                wezterm.mux.kill_workspace(label)
                             end)
                         end
                     end),
