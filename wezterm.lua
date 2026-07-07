@@ -2,6 +2,44 @@ local wezterm = require("wezterm")
 local act = wezterm.action
 local config = wezterm.config_builder()
 -- =========================
+-- Session Tracking (file-based, instant, no CLI needed)
+-- =========================
+local SESSIONS_FILE = wezterm.config_dir .. "/sessions.txt"
+
+local function read_sessions()
+    local sessions = {}
+    local f = io.open(SESSIONS_FILE, "r")
+    if f then
+        for line in f:lines() do
+            if line and #line > 0 then sessions[line] = true end
+        end
+        f:close()
+    end
+    return sessions
+end
+
+local function save_sessions(sessions)
+    local f = io.open(SESSIONS_FILE, "w")
+    if f then
+        for name in pairs(sessions) do f:write(name .. "\n") end
+        f:close()
+    end
+end
+
+local function add_session(name)
+    local s = read_sessions(); s[name] = true; save_sessions(s)
+end
+
+local function remove_session(name)
+    local s = read_sessions(); s[name] = nil; save_sessions(s)
+end
+
+local function get_session_list()
+    local list = {}
+    for name in pairs(read_sessions()) do table.insert(list, { label = name }) end
+    return list
+end
+-- =========================
 -- Performance & Memory
 -- =========================
 config.front_end = "OpenGL"                    -- stable for TUI apps (Helix, etc.)
@@ -157,20 +195,7 @@ config.keys = {
     { mods = "LEADER",       key = "n", action = act.ActivateTabRelative(1) },
     -- List/switch mux sessions (like tmux ls)
     { mods = "LEADER", key = "w", action = wezterm.action_callback(function(window, pane)
-        local handle = io.popen("wezterm cli list --prefer-mux 2>nul")
-        local result = handle:read("*a")
-        handle:close()
-        local seen = {}
-        local choices = {}
-        for line in result:gmatch("[^\r\n]+") do
-            if not line:match("^WINID") then
-                local ws = line:match("^%s*%d+%s+%d+%s+%d+%s+(%S+)")
-                if ws and not seen[ws] then
-                    seen[ws] = true
-                    table.insert(choices, { label = ws })
-                end
-            end
-        end
+        local choices = get_session_list()
         if #choices > 0 then
             window:perform_action(
                 act.InputSelector {
@@ -179,6 +204,7 @@ config.keys = {
                     choices = choices,
                     action = wezterm.action_callback(function(window, pane, id, label)
                         if label then
+                            add_session(label)
                             window:perform_action(
                                 act.SwitchToWorkspace { name = label },
                                 pane
@@ -276,35 +302,16 @@ config.keys = {
         description = "Session name (blank = default mux session):",
         action = wezterm.action_callback(function(window, pane, line)
             if line and #line > 0 then
-                local handle = io.popen("wezterm cli list --prefer-mux 2>nul")
-                local result = handle:read("*a")
-                handle:close()
-                local exists = false
-                for l in result:gmatch("[^\r\n]+") do
-                    if not l:match("^WINID") then
-                        local ws = l:match("^%s*%d+%s+%d+%s+%d+%s+(%S+)")
-                        if ws and ws == line then
-                            exists = true
-                            break
-                        end
-                    end
-                end
-                if exists then
-                    window:perform_action(
-                        act.SwitchToWorkspace { name = line },
-                        pane
-                    )
-                else
-                    window:perform_action(
-                        act.SwitchToWorkspace {
-                            name = line,
-                            spawn = {
-                                domain = { DomainName = "mux" },
-                            },
+                add_session(line)
+                window:perform_action(
+                    act.SwitchToWorkspace {
+                        name = line,
+                        spawn = {
+                            domain = { DomainName = "mux" },
                         },
-                        pane
-                    )
-                end
+                    },
+                    pane
+                )
             else
                 window:perform_action(act.AttachDomain 'mux', pane)
             end
@@ -312,20 +319,7 @@ config.keys = {
     }},
     -- Kill/delete a mux session by selecting from list
     { mods = "LEADER", key = "'", action = wezterm.action_callback(function(window, pane)
-        local handle = io.popen("wezterm cli list --prefer-mux 2>nul")
-        local result = handle:read("*a")
-        handle:close()
-        local seen = {}
-        local choices = {}
-        for line in result:gmatch("[^\r\n]+") do
-            if not line:match("^WINID") then
-                local ws = line:match("^%s*%d+%s+%d+%s+%d+%s+(%S+)")
-                if ws and not seen[ws] then
-                    seen[ws] = true
-                    table.insert(choices, { label = ws })
-                end
-            end
-        end
+        local choices = get_session_list()
         if #choices > 0 then
             window:perform_action(
                 act.InputSelector {
@@ -334,6 +328,7 @@ config.keys = {
                     choices = choices,
                     action = wezterm.action_callback(function(window, pane, id, label)
                         if label then
+                            remove_session(label)
                             pcall(function()
                                 wezterm.mux.kill_workspace(label)
                             end)
