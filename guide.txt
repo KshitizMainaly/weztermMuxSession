@@ -1,0 +1,7 @@
+so basically : 
+first do 
+wezterm-mux-server --daemonize  , to start headless background mux server running 
+then 
+leader + a , to create or connect to any session you like 
+leader + d , to dettach and then you can close whole wezterm if you like since it doesnt matter as long as our daemon in background running 
+leader + w  , it list all workspace and also any persistence session you created with leader +a  so you can switch or connect by entering to them
