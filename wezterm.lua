@@ -1,6 +1,32 @@
 local wezterm = require("wezterm")
 local act = wezterm.action
+local agent_deck = wezterm.plugin.require("https://github.com/Eric162/wezterm-agent-deck")
 local config = wezterm.config_builder()
+agent_deck.apply_to_config(config, {
+    notifications = { enabled = true, on_waiting = true },
+    tab_title = { enabled = false },
+})
+-- =========================
+-- Rename Timestamps (for manual rename vs auto-status priority)
+-- =========================
+local rename_timestamps = {}
+local function prune_rename_timestamps()
+    local valid = {}
+    local ok, wins = pcall(function() return wezterm.mux.all_windows() end)
+    if ok and wins then
+        for _, w in ipairs(wins) do
+            for _, t in ipairs(w:tabs() or {}) do
+                local p = t:active_pane()
+                if p then valid[p:pane_id()] = true end
+            end
+        end
+        for pid in pairs(rename_timestamps) do
+            if not valid[pid] then rename_timestamps[pid] = nil end
+        end
+    end
+    wezterm.time.call_after(120, prune_rename_timestamps)
+end
+prune_rename_timestamps()
 -- =========================
 -- Session Tracking (file-based, instant, no CLI needed)
 -- =========================
@@ -34,10 +60,54 @@ local function remove_session(name)
     local s = read_sessions(); s[name] = nil; save_sessions(s)
 end
 
-local function get_session_list()
+-- Every known session = live workspaces UNION names remembered in the file.
+local function all_sessions()
+    local set = read_sessions()
+    local ok, live = pcall(function() return wezterm.mux.get_workspace_names() end)
+    if ok and live then
+        for _, w in ipairs(live) do set[w] = true end
+    end
     local list = {}
-    for name in pairs(read_sessions()) do table.insert(list, { label = name }) end
+    for name in pairs(set) do table.insert(list, name) end
+    table.sort(list)
     return list
+end
+
+-- Switch to (creating if needed) the named session on the mux domain.
+local function switch_to_session(window, pane, name)
+    add_session(name)
+    window:perform_action(act.AttachDomain("mux"), pane)
+    window:perform_action(
+        act.SwitchToWorkspace {
+            name = name,
+            spawn = { domain = { DomainName = "mux" } },
+        },
+        pane
+    )
+end
+
+-- Close every tab that belongs to a workspace, wherever it lives.
+local function close_workspace_tabs(window, name)
+    local ok, wins = pcall(function() return wezterm.mux.all_windows() end)
+    if ok and wins then
+        local panes = {}
+        for _, mw in ipairs(wins) do
+            if mw:get_workspace() == name then
+                for _, tab in ipairs(mw:tabs() or {}) do
+                    local p = tab:active_pane()
+                    if p then table.insert(panes, p) end
+                end
+            end
+        end
+        for _, p in ipairs(panes) do
+            window:perform_action(act.CloseCurrentTab { confirm = false }, p)
+        end
+    end
+end
+
+local function kill_session(window, name)
+    close_workspace_tabs(window, name)
+    remove_session(name)
 end
 -- =========================
 -- Performance & Memory
@@ -52,6 +122,7 @@ config.enable_scroll_bar = false             -- no scroll bar widget
 config.check_for_updates = false             -- no background update checks
 config.status_update_interval = 1000         -- status bar update every second (for clock)
 config.unicode_version = 14                  -- avoid expensive unicode lookups
+config.tab_max_width = 32                    -- room for agent status text in tabs
 config.clean_exit_codes = { 130 }            -- clean exit on Ctrl+C
 --ssh alltop wezterm multiplexing
 config.ssh_domains = {
@@ -64,13 +135,17 @@ config.ssh_domains = {
 }
 config.unix_domains = {
   {
-    name = 'mux',  -- renamed from 'local'
+    name = 'mux',
   },
 }
 
--- Leader+a = attach/create named persistent session (tmux "new -A -s")
--- Leader+d = detach (tmux "detach")
--- Leader+w = list/switch sessions (tmux "ls")
+-- Session / workspace model:
+--   A "session" is a tracked workspace on the mux domain, surviving detach.
+--   Leader+a       = create/switch to a named session
+--   Leader+w       = workspace launcher (create/switch any)
+--   Leader+'       = Session Manager: list, create, switch to, delete
+--   Leader+d       = detach: close tab, session stays on mux server
+--   Leader+g       = delete a tracked session
 -- =========================
 -- Window & Appearance
 -- =========================
@@ -90,7 +165,7 @@ config.font = wezterm.font_with_fallback({
     "JetBrainsMono NF",
     "Iosevka Nerd Font",
 })
-config.font_size = 11
+config.font_size = 12
 -- config.font_size = 15
 -- = :Standard Verified Themes:
 -- "Dracula", "Tokyo Night", "Kanagawa", "Nord", "One Dark (Gogh)"
@@ -101,7 +176,7 @@ config.font_size = 11
 -- "Yorumi", "Miku (Gogh)", "Evangelion-01 (Gogh)", "Neon (Gogh)"
 -- Full Gallery: https://wezfurlong.org/wezterm/colorschemes/index.html
 -- rose-pine-moon // this one is also beautiful
-config.color_scheme = "rose-pine-moon" -- Dracula is robust. Try "Tokyo Night" or "Aura" for a different feel.
+config.color_scheme = "rose-pine-moon"
 config.window_padding = {
     left = 25,
     right = 25,
@@ -181,46 +256,22 @@ config.keys = {
     { mods = "LEADER",       key = "x", action = act.CloseCurrentPane { confirm = true } },
     { mods = "LEADER",       key = "b", action = act.ActivateTabRelative(-1) },
     { mods = "LEADER",       key = "n", action = act.ActivateTabRelative(1) },
-    -- List/switch mux sessions (like tmux ls)
-    { mods = "LEADER", key = "w", action = wezterm.action_callback(function(window, pane)
-        local choices = get_session_list()
-        if #choices > 0 then
-            window:perform_action(
-                act.InputSelector {
-                    title = "Mux Sessions",
-                    alphabet = "abcdefghijklmnopqrstuvwxyz",
-                    choices = choices,
-                    action = wezterm.action_callback(function(window, pane, id, label)
-                        if label then
-                            add_session(label)
-                            window:perform_action(
-                                act.SwitchToWorkspace { name = label },
-                                pane
-                            )
-                        end
-                    end),
-                },
-                pane
-            )
-        else
-            window:perform_action(
-                act.ShowLauncherArgs { flags = "WORKSPACES" },
-                pane
-            )
-        end
-    end)},
+    -- Workspace switcher (shows ALL workspaces, create new by typing name)
+    { mods = "LEADER", key = "w", action = act.ShowLauncherArgs { flags = "WORKSPACES" } },
     -- Close all tabs in CURRENT workspace (with prompt)
-    { mods = "LEADER", key = "q", action = act.PromptInputLine {
-        description = "Close all tabs in this workspace? (y/n)",
-        action = wezterm.action_callback(function(window, pane, line)
-            if line and line:lower() == "y" then
-                local tabs = window:mux_window():tabs()
-                for _ = 1, #tabs do
-                    window:perform_action(act.CloseCurrentTab { confirm = false }, window:active_pane())
-                end
-            end
-        end),
-    }},
+    { mods = "LEADER", key = "q", action = wezterm.action_callback(function(window, pane)
+        local ws = window:active_workspace()
+        window:perform_action(act.InputSelector {
+            title = "Close workspace: " .. ws,
+            choices = {
+                { id = "yes", label = "󰄬  Yes, close all tabs in " .. ws },
+                { id = "no",  label = "󰅖  Cancel" },
+            },
+            action = wezterm.action_callback(function(_, _, id)
+                if id == "yes" then close_workspace_tabs(window, ws) end
+            end),
+        }, pane)
+    end)},
     { mods = "LEADER",       key = "t", action = act.ShowTabNavigator },
     { mods = "LEADER",       key = "p", action = act.ActivateCommandPalette },
     { mods = "LEADER",       key = "\\", action = act.SplitHorizontal({ domain = "CurrentPaneDomain" }) },
@@ -273,6 +324,7 @@ config.keys = {
         action = wezterm.action_callback(function(window, pane, line)
             if line then
                 window:active_tab():set_title(line)
+                rename_timestamps[pane:pane_id()] = os.time()
             end
         end),
     }},
@@ -285,61 +337,109 @@ config.keys = {
             end
         end),
     }},
-    -- Attach / create named persistent session (tmux: new -A -s <name>)
+    -- Create / switch to a named session (tmux: new -A -s <name>)
     { mods = "LEADER", key = "a", action = act.PromptInputLine {
         description = "Session name (blank = default mux session):",
         action = wezterm.action_callback(function(window, pane, line)
             if line and #line > 0 then
-                local sessions = read_sessions()
-                local exists = sessions[line]
-                add_session(line)
-                if exists then
-                    window:perform_action(
-                        act.SwitchToWorkspace { name = line },
-                        pane
-                    )
-                else
-                    window:perform_action(
-                        act.SwitchToWorkspace {
-                            name = line,
-                            spawn = {
-                                domain = { DomainName = "mux" },
-                            },
-                        },
-                        pane
-                    )
-                end
+                switch_to_session(window, pane, line)
             else
                 window:perform_action(act.AttachDomain 'mux', pane)
             end
         end),
     }},
-    -- Kill/delete a mux session by selecting from list
-    { mods = "LEADER", key = "g", action = wezterm.action_callback(function(window, pane)
-        local choices = get_session_list()
-        if #choices > 0 then
-            window:perform_action(
-                act.InputSelector {
-                    title = "Remove Session",
-                    alphabet = "abcdefghijklmnopqrstuvwxyz",
-                    choices = choices,
-                    action = wezterm.action_callback(function(window, pane, id, label)
-                        if label then
-                            remove_session(label)
-                        end
-                    end),
-                },
-                pane
-            )
-        end
-    end)},
-    -- Close mux tab (session keeps running on server, like tmux detach)
+    -- Detach: close tab, session stays alive on mux server
     { mods = "LEADER", key = "d", action = wezterm.action_callback(function(window, pane)
         local tab_count = #window:mux_window():tabs()
         if tab_count <= 1 then
             window:perform_action(act.SpawnTab("DefaultDomain"), pane)
         end
         window:perform_action(act.CloseCurrentTab { confirm = false }, pane)
+    end)},
+    -- Delete a tracked session
+    { mods = "LEADER", key = "g", action = wezterm.action_callback(function(window, pane)
+        local choices = {}
+        for _, name in ipairs(all_sessions()) do
+            table.insert(choices, { id = name, label = name })
+        end
+        if #choices > 0 then
+            window:perform_action(
+                act.InputSelector {
+                    title = "Delete Session",
+                    choices = choices,
+                    action = wezterm.action_callback(function(_, _, id)
+                        if id then kill_session(window, id) end
+                    end),
+                },
+                pane
+            )
+        end
+    end)},
+    -- Session Manager: list, create, switch to, rename, delete
+    { mods = "LEADER", key = "'", action = wezterm.action_callback(function(window, pane)
+        local current = window:active_workspace()
+        local choices = { { id = "\1new", label = "＋  Create new session…" } }
+        for _, name in ipairs(all_sessions()) do
+            local marker = (name == current) and "●  " or "   "
+            table.insert(choices, { id = name, label = marker .. name })
+        end
+        window:perform_action(
+            act.InputSelector {
+                title = "Session Manager",
+                fuzzy = true,
+                fuzzy_description = "Session (type to filter): ",
+                choices = choices,
+                action = wezterm.action_callback(function(window, pane, id, _label)
+                    if not id then return end
+                    if id == "\1new" then
+                        window:perform_action(act.PromptInputLine {
+                            description = "New session name:",
+                            action = wezterm.action_callback(function(window, pane, line)
+                                if line and #line > 0 then switch_to_session(window, pane, line) end
+                            end),
+                        }, pane)
+                        return
+                    end
+                    local name = id
+                    window:perform_action(act.InputSelector {
+                        title = "Session: " .. name,
+                        choices = {
+                            { id = "switch", label = "󰁔  Switch to  " .. name },
+                            { id = "rename", label = "󰑕  Rename     " .. name },
+                            { id = "delete", label = "󰆴  Delete     " .. name },
+                            { id = "cancel", label = "󰅖  Cancel" },
+                        },
+                        action = wezterm.action_callback(function(window, pane, act_id, _l)
+                            if not act_id or act_id == "cancel" then return end
+                            if act_id == "switch" then
+                                switch_to_session(window, pane, name)
+                            elseif act_id == "rename" then
+                                window:perform_action(act.PromptInputLine {
+                                    description = "Rename '" .. name .. "' to:",
+                                    action = wezterm.action_callback(function(window, pane, line)
+                                        if not line or #line == 0 or line == name then return end
+                                        pcall(function() wezterm.mux.rename_workspace(name, line) end)
+                                        remove_session(name)
+                                        add_session(line)
+                                        window:perform_action(act.ShowMessage { message = "Renamed to: " .. line }, pane)
+                                    end),
+                                }, pane)
+                            elseif act_id == "delete" then
+                                if name == current then
+                                    window:perform_action(act.ShowMessage {
+                                        message = "Can't delete the session you're in — switch away first.",
+                                    }, pane)
+                                    return
+                                end
+                                kill_session(window, name)
+                                window:perform_action(act.ShowMessage { message = "Deleted session: " .. name }, pane)
+                            end
+                        end),
+                    }, pane)
+                end),
+            },
+            pane
+        )
     end)},
 }
 -- Tabs 1-9
@@ -371,13 +471,11 @@ config.harfbuzz_features = { "calt=1", "clig=1", "liga=1" }
 -- =========================
 -- Hyperlink Rules (clickable paths/URLs)
 -- =========================
-config.hyperlink_rules = {
-    { regex = "\\b\\w+://[\\w.-]+\\.[a-z]{2,15}\\S*\\b", format = "$0" },
-    { regex = "\\b[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+\\b", format = "mailto:$0" },
-    { regex = "\\b(/[\\w.-]+)+/?\\b", format = "file://$0" },
-    { regex = "\\bhttps?://localhost(:\\d+)?\\S*\\b", format = "$0" },
-    { regex = "\\bhttps?://127\\.0\\.0\\.1(:\\d+)?\\S*\\b", format = "$0" },
-}
+config.hyperlink_rules = wezterm.default_hyperlink_rules()
+table.insert(config.hyperlink_rules, {
+    regex = "\\bhttps?://(?:localhost|127\\.0\\.0\\.1)(?::\\d+)?\\S*\\b",
+    format = "$0",
+})
 -- =========================
 -- Quick Select Patterns
 -- =========================
@@ -399,7 +497,6 @@ config.send_composed_key_when_right_alt_is_pressed = false
 -- =========================
 -- Right Status Bar (date/time + hostname)
 -- =========================
-config.status_update_interval = 1000
 wezterm.on("update-right-status", function(window, pane)
     local date = wezterm.strftime("%Y-%m-%d %H:%M")
     local hostname = wezterm.hostname()
@@ -413,20 +510,65 @@ wezterm.on("update-right-status", function(window, pane)
     }))
 end)
 -- =========================
--- Tab Title Formatting (process + cwd)
+-- Tab Title Formatting (agent-deck dots + OpenCode status + fallback)
 -- =========================
+local function read_custom_status(pane_id)
+    local path = wezterm.home_dir .. '/.local/state/wezterm-attention/' .. tostring(pane_id)
+    local f = io.open(path, 'r')
+    if not f then return nil, nil end
+    local content = f:read('*a')
+    f:close()
+    local ok, decoded = pcall(wezterm.json_parse, content)
+    if ok and decoded and decoded.text then
+        return decoded.text, (decoded.timestamp or 0) / 1000
+    end
+    return nil, nil
+end
+
 wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     local pane = tab.active_pane
-    local title = pane.title
-    if title and #title > 0 then
-        title = title
+    if not pane then return {} end
+    local state = agent_deck.get_agent_state(pane.pane_id)
+
+    local bg = tab.is_active and "#3b3052" or "#1e1e2e"
+    local fg = tab.is_active and "#ffffff" or "#c0c0c0"
+
+    local elements = {}
+    local reserved = 0
+
+    if state then
+        table.insert(elements, { Background = { Color = bg } })
+        table.insert(elements, { Foreground = { Color = agent_deck.get_status_color(state.status) } })
+        table.insert(elements, { Text = agent_deck.get_status_icon(state.status) .. " " })
+        reserved = 2
+    end
+
+    local custom_text, custom_ts = read_custom_status(pane.pane_id)
+    local rename_ts = rename_timestamps[pane.pane_id] or 0
+
+    local title
+    if tab.tab_title and #tab.tab_title > 0 and rename_ts >= (custom_ts or 0) then
+        title = tab.tab_title
+    elseif custom_text then
+        title = custom_text:gsub("^opencode: ", "")
+    elseif tab.tab_title and #tab.tab_title > 0 then
+        title = tab.tab_title
     else
-        title = pane.foreground_process_name
-        title = title:match("([^/\\]+)$") or title
+        title = pane.title
+        if #title == 0 then
+            title = pane.foreground_process_name:match("([^/\\]+)$") or "shell"
+        end
     end
-    if #title > 20 then
-        title = title:sub(1, 18) .. ".."
+
+    local avail = math.max(max_width - reserved - 2, 6)
+    if #title > avail then
+        title = title:sub(1, avail - 1) .. "…"
     end
-    return " " .. title .. " "
+
+    table.insert(elements, { Background = { Color = bg } })
+    table.insert(elements, { Foreground = { Color = fg } })
+    table.insert(elements, { Text = " " .. title .. " " })
+
+    return elements
 end)
 return config
