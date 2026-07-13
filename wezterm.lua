@@ -193,7 +193,7 @@ config.window_frame = {
     inactive_titlebar_fg = "#cdd6f4",
     active_titlebar_fg = "#cdd6f4",
 }
-config.hide_tab_bar_if_only_one_tab = true
+config.hide_tab_bar_if_only_one_tab = false
 config.tab_bar_at_bottom = true
 config.use_fancy_tab_bar = false
 -- =========================
