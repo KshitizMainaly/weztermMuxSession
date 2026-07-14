@@ -525,6 +525,26 @@ local function read_custom_status(pane_id)
     return nil, nil
 end
 
+-- Basename of a pane's working directory (e.g. the repo/service folder).
+-- Handy fallback title when no agent is running: tells you *where* the tab is
+-- sitting instead of showing raw shell/command noise. Requires OSC 7 (shell
+-- integration) to report the cwd; returns nil if unavailable.
+local function cwd_basename(pane)
+    local cwd = pane.current_working_dir
+    if not cwd then return nil end
+    local path
+    local ok = pcall(function() path = cwd.file_path end)  -- newer wezterm: Url object
+    if not ok or not path or #path == 0 then
+        path = tostring(cwd):gsub("^file://[^/]*", "")     -- fallback: file://host/path
+    end
+    path = path
+        :gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end)  -- url-decode
+        :gsub("[/\\]+$", "")                                                    -- trim trailing slash
+    local base = path:match("([^/\\]+)$")
+    if base and #base > 0 then return base end
+    return nil
+end
+
 wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     local pane = tab.active_pane
     if not pane then return {} end
@@ -546,6 +566,16 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     local custom_text, custom_ts = read_custom_status(pane.pane_id)
     local rename_ts = rename_timestamps[pane.pane_id] or 0
 
+    -- Only trust the file-based OpenCode status while OpenCode is actually
+    -- running in this pane. agent-deck detects the process (and clears `state`
+    -- after it exits), so this mirrors how Claude's tab reacts to its process.
+    -- Once OpenCode quits, we drop the stale status file and fall back to the
+    -- normal pane title instead of freezing on the last "opencode: …" text.
+    local opencode_active = state ~= nil and state.agent_type == "opencode"
+    if not opencode_active then
+        custom_text, custom_ts = nil, nil
+    end
+
     local title
     if tab.tab_title and #tab.tab_title > 0 and rename_ts >= (custom_ts or 0) then
         title = tab.tab_title
@@ -554,8 +584,11 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     elseif tab.tab_title and #tab.tab_title > 0 then
         title = tab.tab_title
     else
-        title = pane.title
-        if #title == 0 then
+        title = cwd_basename(pane)
+        if not title or #title == 0 then
+            title = pane.title
+        end
+        if not title or #title == 0 then
             title = pane.foreground_process_name:match("([^/\\]+)$") or "shell"
         end
     end
