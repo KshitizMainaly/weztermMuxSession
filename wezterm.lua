@@ -32,6 +32,17 @@ prune_rename_timestamps()
 -- =========================
 local SESSIONS_FILE = wezterm.config_dir .. "/sessions.txt"
 
+-- The session we were in before the current one, so Leader+w can bounce back.
+-- Set inside switch_to_session (the single switch path) so it's always accurate
+-- the instant you switch — no reliance on the status timer.
+local prev_workspace = nil
+
+-- Small toast helper: wezterm has no in-terminal "message" action (the old
+-- act.ShowMessage this config used does not exist), so use an OS toast.
+local function notify(window, msg)
+    pcall(function() window:toast_notification("WezTerm", msg, nil, 2500) end)
+end
+
 local function read_sessions()
     local sessions = {}
     local f = io.open(SESSIONS_FILE, "r")
@@ -80,6 +91,9 @@ end
 -- AttachDomain here is what re-imported every existing mux window and made
 -- this look like it launched a second WezTerm.
 local function switch_to_session(window, pane, name)
+    -- Remember where we're leaving from so Leader+w can bounce back to it.
+    local cur = window:active_workspace()
+    if cur and cur ~= name then prev_workspace = cur end
     add_session(name)
     window:perform_action(
         act.SwitchToWorkspace {
@@ -113,6 +127,68 @@ local function kill_session(window, name)
     close_workspace_tabs(window, name)
     remove_session(name)
 end
+
+local function bulk_delete_mode(window, pane)
+    local marked = {}; local marked_count = 0
+
+    local function show_bulk()
+        local choices = {}
+        table.insert(choices, { id = "\1del", label = "✓  Delete marked (" .. marked_count .. ")" })
+        table.insert(choices, { id = "\1cancel", label = "✗  Cancel" })
+        table.insert(choices, { id = "\1sep", label = "─── toggle sessions ───" })
+
+        local current = window:active_workspace()
+        for _, name in ipairs(all_sessions()) do
+            if name ~= current then
+                local marker = marked[name] and "☑  " or "☐  "
+                table.insert(choices, { id = name, label = marker .. name })
+            end
+        end
+
+        window:perform_action(act.InputSelector {
+            title = "Bulk delete — select sessions to mark",
+            fuzzy = true,
+            fuzzy_description = "Mark sessions to delete: ",
+            choices = choices,
+            action = wezterm.action_callback(function(win, pane, id, _label)
+                if not id or id == "\1cancel" then return end
+                if id == "\1sep" then show_bulk(); return end
+                if id == "\1del" then
+                    local names = {}
+                    for n in pairs(marked) do table.insert(names, n) end
+                    table.sort(names)
+                    if #names == 0 then
+                        notify(win, "No sessions marked for deletion.")
+                        show_bulk()
+                        return
+                    end
+                    win:perform_action(act.InputSelector {
+                        title = "Delete " .. #names .. " sessions?",
+                        choices = {
+                            { id = "yes", label = "󰄬  Yes, delete " .. #names .. " sessions" },
+                            { id = "no",  label = "󰅖  Cancel" },
+                        },
+                        action = wezterm.action_callback(function(win, pane, id2)
+                            if id2 == "yes" then
+                                for _, n in ipairs(names) do
+                                    kill_session(win, n)
+                                end
+                                notify(win, "Deleted " .. #names .. " sessions.")
+                            end
+                        end),
+                    }, pane)
+                    return
+                end
+                -- Toggle session
+                if marked[id] then marked[id] = nil; marked_count = marked_count - 1 else marked[id] = true; marked_count = marked_count + 1 end
+                show_bulk()
+            end),
+        }, pane)
+    end
+
+    show_bulk()
+end
+
 -- =========================
 -- Performance & Memory
 -- =========================
@@ -161,8 +237,9 @@ config.default_gui_startup_args = { 'connect', 'mux' }
 --   background mux server and survives a full GUI close. "Session" and
 --   "workspace" are now the same thing — a named, persistent workspace.
 --   Leader+a       = create/switch to a named session (blank = "default")
---   Leader+w       = workspace launcher (every entry here is persistent)
---   Leader+'       = Session Manager: list, create, switch, rename, delete
+--   Leader+w       = toggle back to your previous session (bounce between two)
+--   Leader+'       = session hub: pick to switch instantly; create + manage
+--                    (rename/delete) behind their own entries
 --   Leader+d       = close current tab (its workspace stays on the server)
 --   Leader+g       = delete a tracked session
 --   To step away:   just close the GUI window — the mux server keeps every
@@ -277,8 +354,16 @@ config.keys = {
     { mods = "LEADER",       key = "x", action = act.CloseCurrentPane { confirm = true } },
     { mods = "LEADER",       key = "b", action = act.ActivateTabRelative(-1) },
     { mods = "LEADER",       key = "n", action = act.ActivateTabRelative(1) },
-    -- Workspace switcher (shows ALL workspaces, create new by typing name)
-    { mods = "LEADER", key = "w", action = act.ShowLauncherArgs { flags = "WORKSPACES" } },
+    -- Toggle back to your previous session (bounce between the two you use).
+    { mods = "LEADER", key = "w", action = wezterm.action_callback(function(window, pane)
+        local cur = window:active_workspace()
+        if prev_workspace and prev_workspace ~= cur then
+            switch_to_session(window, pane, prev_workspace)
+        else
+            -- No previous session yet — show the switcher so the key is never dead.
+            window:perform_action(act.ShowLauncherArgs { flags = "WORKSPACES" }, pane)
+        end
+    end)},
     -- Close all tabs in CURRENT workspace (with prompt)
     { mods = "LEADER", key = "q", action = wezterm.action_callback(function(window, pane)
         local ws = window:active_workspace()
@@ -396,71 +481,86 @@ config.keys = {
             )
         end
     end)},
-    -- Session Manager: list, create, switch to, rename, delete
+    -- Session hub: pick a session to switch INSTANTLY; create + manage
+    -- (rename/delete) live behind their own entries so switching stays one step.
     { mods = "LEADER", key = "'", action = wezterm.action_callback(function(window, pane)
         local current = window:active_workspace()
-        local choices = { { id = "\1new", label = "＋  Create new session…" } }
+        local choices = {
+            { id = "\1new",    label = "＋  Create new session…" },
+            { id = "\1manage", label = "⚙  Manage (rename / delete)…" },
+            { id = "\1bulk", label = "🗑  Bulk delete sessions…" },
+        }
         for _, name in ipairs(all_sessions()) do
             local marker = (name == current) and "●  " or "   "
             table.insert(choices, { id = name, label = marker .. name })
         end
-        window:perform_action(
-            act.InputSelector {
-                title = "Session Manager",
-                fuzzy = true,
-                fuzzy_description = "Session (type to filter): ",
-                choices = choices,
-                action = wezterm.action_callback(function(window, pane, id, _label)
-                    if not id then return end
-                    if id == "\1new" then
-                        window:perform_action(act.PromptInputLine {
-                            description = "New session name:",
-                            action = wezterm.action_callback(function(window, pane, line)
-                                if line and #line > 0 then switch_to_session(window, pane, line) end
-                            end),
-                        }, pane)
-                        return
-                    end
-                    local name = id
-                    window:perform_action(act.InputSelector {
-                        title = "Session: " .. name,
-                        choices = {
-                            { id = "switch", label = "󰁔  Switch to  " .. name },
-                            { id = "rename", label = "󰑕  Rename     " .. name },
-                            { id = "delete", label = "󰆴  Delete     " .. name },
-                            { id = "cancel", label = "󰅖  Cancel" },
-                        },
-                        action = wezterm.action_callback(function(window, pane, act_id, _l)
-                            if not act_id or act_id == "cancel" then return end
-                            if act_id == "switch" then
-                                switch_to_session(window, pane, name)
-                            elseif act_id == "rename" then
-                                window:perform_action(act.PromptInputLine {
-                                    description = "Rename '" .. name .. "' to:",
-                                    action = wezterm.action_callback(function(window, pane, line)
-                                        if not line or #line == 0 or line == name then return end
-                                        pcall(function() wezterm.mux.rename_workspace(name, line) end)
-                                        remove_session(name)
-                                        add_session(line)
-                                        window:perform_action(act.ShowMessage { message = "Renamed to: " .. line }, pane)
-                                    end),
-                                }, pane)
-                            elseif act_id == "delete" then
-                                if name == current then
-                                    window:perform_action(act.ShowMessage {
-                                        message = "Can't delete the session you're in — switch away first.",
-                                    }, pane)
-                                    return
-                                end
-                                kill_session(window, name)
-                                window:perform_action(act.ShowMessage { message = "Deleted session: " .. name }, pane)
-                            end
+        window:perform_action(act.InputSelector {
+            title = "Sessions",
+            fuzzy = true,
+            fuzzy_description = "Switch to (type to filter): ",
+            choices = choices,
+            action = wezterm.action_callback(function(window, pane, id, _label)
+                if not id then return end
+                if id == "\1new" then
+                    window:perform_action(act.PromptInputLine {
+                        description = "New session name:",
+                        action = wezterm.action_callback(function(window, pane, line)
+                            if line and #line > 0 then switch_to_session(window, pane, line) end
                         end),
                     }, pane)
-                end),
-            },
-            pane
-        )
+                    return
+                end
+                if id == "\1manage" then
+                    local mchoices = {}
+                    for _, name in ipairs(all_sessions()) do
+                        table.insert(mchoices, { id = name, label = name })
+                    end
+                    window:perform_action(act.InputSelector {
+                        title = "Manage session",
+                        fuzzy = true,
+                        fuzzy_description = "Manage (type to filter): ",
+                        choices = mchoices,
+                        action = wezterm.action_callback(function(window, pane, name, _l)
+                            if not name then return end
+                            window:perform_action(act.InputSelector {
+                                title = "Session: " .. name,
+                                choices = {
+                                    { id = "rename", label = "󰑕  Rename  " .. name },
+                                    { id = "delete", label = "󰆴  Delete  " .. name },
+                                    { id = "cancel", label = "󰅖  Cancel" },
+                                },
+                                action = wezterm.action_callback(function(window, pane, act_id, _l2)
+                                    if not act_id or act_id == "cancel" then return end
+                                    if act_id == "rename" then
+                                        window:perform_action(act.PromptInputLine {
+                                            description = "Rename '" .. name .. "' to:",
+                                            action = wezterm.action_callback(function(window, pane, line)
+                                                if not line or #line == 0 or line == name then return end
+                                                pcall(function() wezterm.mux.rename_workspace(name, line) end)
+                                                remove_session(name)
+                                                add_session(line)
+                                                notify(window, "Renamed to: " .. line)
+                                            end),
+                                        }, pane)
+                                    elseif act_id == "delete" then
+                                        if name == window:active_workspace() then
+                                            notify(window, "Can't delete the session you're in — switch away first.")
+                                            return
+                                        end
+                                        kill_session(window, name)
+                                        notify(window, "Deleted session: " .. name)
+                                    end
+                                end),
+                            }, pane)
+                        end),
+                    }, pane)
+                    return
+                end
+                if id == "\1bulk" then bulk_delete_mode(window, pane); return end
+                -- a plain session name → switch instantly
+                switch_to_session(window, pane, id)
+            end),
+        }, pane)
     end)},
 }
 -- Tabs 1-9
@@ -580,8 +680,12 @@ local ACTIVE_FG   = "#ffffff"
 local INACTIVE_BG = "#2c2a40"   -- raised off the bar, dimmer than active
 local INACTIVE_FG = "#a6accd"
 local TABBAR_BG   = "#1e1e2e"   -- matches config.colors.tab_bar.background
+-- Divider between tabs. Bright gold so each tab boundary is obvious at a
+-- glance. Swap SEP_ICON for a different shape if you like:
+--   0xE0B1 ""  thin chevron (current)   0xE0B0 ""  solid arrow (bold)
+--   0x2503 "┃"  heavy bar               0x2502 "│"  light bar
 local SEP_ICON    = utf8.char(0xE0B1)  --  thin right divider
-local SEP_FG      = "#6c7086"
+local SEP_FG      = "#f6c177"           -- gold — high contrast vs the dark tab bar
 
 wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     local pane = tab.active_pane
