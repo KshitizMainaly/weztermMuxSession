@@ -74,9 +74,13 @@ local function all_sessions()
 end
 
 -- Switch to (creating if needed) the named session on the mux domain.
+-- No AttachDomain here: the GUI is already attached to mux at startup
+-- (see default_gui_startup_args), so SwitchToWorkspace with a mux spawn
+-- domain just creates/switches the ONE workspace we want. Calling
+-- AttachDomain here is what re-imported every existing mux window and made
+-- this look like it launched a second WezTerm.
 local function switch_to_session(window, pane, name)
     add_session(name)
-    window:perform_action(act.AttachDomain("mux"), pane)
     window:perform_action(
         act.SwitchToWorkspace {
             name = name,
@@ -139,13 +143,30 @@ config.unix_domains = {
   },
 }
 
--- Session / workspace model:
---   A "session" is a tracked workspace on the mux domain, surviving detach.
---   Leader+a       = create/switch to a named session
---   Leader+w       = workspace launcher (create/switch any)
---   Leader+'       = Session Manager: list, create, switch to, delete
---   Leader+d       = detach: close tab, session stays on mux server
+-- Auto-connect the GUI to the background mux server on every launch.
+-- Connecting to a unix domain auto-starts wezterm-mux-server if it isn't
+-- already running, so there is NO manual `wezterm-mux-server --daemonize`
+-- step any more. On relaunch this REATTACHES to the existing mux windows
+-- (it imports them, it does not duplicate them), which is why every
+-- workspace you create now lives on mux and is persistent by default.
+-- Because the whole GUI is already attached to mux at startup, none of the
+-- keybindings below need AttachDomain — that action is what used to
+-- re-import every window and make Leader+a look like it "spawned another
+-- WezTerm". It's gone now.
+config.default_gui_startup_args = { 'connect', 'mux' }
+
+-- Session / workspace model (UNIFIED — everything lives on the mux server):
+--   There is only one primitive: the workspace. Because the GUI attaches to
+--   the `mux` domain at startup, EVERY workspace/tab you open runs on the
+--   background mux server and survives a full GUI close. "Session" and
+--   "workspace" are now the same thing — a named, persistent workspace.
+--   Leader+a       = create/switch to a named session (blank = "default")
+--   Leader+w       = workspace launcher (every entry here is persistent)
+--   Leader+'       = Session Manager: list, create, switch, rename, delete
+--   Leader+d       = close current tab (its workspace stays on the server)
 --   Leader+g       = delete a tracked session
+--   To step away:   just close the GUI window — the mux server keeps every
+--                   pane alive; relaunching WezTerm reattaches them.
 -- =========================
 -- Window & Appearance
 -- =========================
@@ -344,7 +365,7 @@ config.keys = {
             if line and #line > 0 then
                 switch_to_session(window, pane, line)
             else
-                window:perform_action(act.AttachDomain 'mux', pane)
+                switch_to_session(window, pane, "default")
             end
         end),
     }},

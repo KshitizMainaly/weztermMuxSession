@@ -1,7 +1,28 @@
-so basically : 
-first do 
-wezterm-mux-server --daemonize  , to start headless background mux server running 
-then 
-leader + a , to create or connect to any session you like 
-leader + d , to dettach and then you can close whole wezterm if you like since it doesnt matter as long as our daemon in background running 
-leader + w  , it list all workspace and also any persistence session you created with leader +a  so you can switch or connect by entering to them
+WEZTERM SESSION MODEL (unified — everything is persistent)
+==========================================================
+
+There is only ONE concept now: the workspace. The GUI auto-connects to the
+background mux server on launch (config.default_gui_startup_args), and that
+server auto-starts itself the first time — so there is NO manual
+`wezterm-mux-server --daemonize` step any more.
+
+Because every tab runs on the mux server, every workspace/session survives a
+full WezTerm close. "Session" and "workspace" are the same thing.
+
+Daily use:
+  Leader + a   create or switch to a named session (blank name = "default")
+  Leader + w   launcher listing every session (all persistent) — Enter to
+               switch, or type a new name to create one
+  Leader + '   Session Manager: create / switch / rename / delete
+  Leader + d   close the current tab (its session stays on the server)
+  Leader + g   delete a tracked session
+
+To step away and keep everything running:
+  Just close the WezTerm window (or Leader+Shift+q to quit the GUI).
+  The mux server keeps all panes alive in the background. Relaunch WezTerm
+  and it reattaches to exactly what you left — no window duplication.
+
+Notes:
+  - Leader+a no longer spawns a second WezTerm window. That was AttachDomain
+    re-importing every existing mux window; it has been removed.
+  - The mux server only dies if you kill wezterm-mux-server.exe or reboot.
