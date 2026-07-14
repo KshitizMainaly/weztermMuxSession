@@ -122,7 +122,7 @@ config.enable_scroll_bar = false             -- no scroll bar widget
 config.check_for_updates = false             -- no background update checks
 config.status_update_interval = 1000         -- status bar update every second (for clock)
 config.unicode_version = 14                  -- avoid expensive unicode lookups
-config.tab_max_width = 32                    -- room for agent status text in tabs
+config.tab_max_width = 48                    -- room for agent status + repo  branch
 config.clean_exit_codes = { 130 }            -- clean exit on Ctrl+C
 --ssh alltop wezterm multiplexing
 config.ssh_domains = {
@@ -545,13 +545,30 @@ local function cwd_basename(pane)
     return nil
 end
 
+-- Nerd Font git-branch glyph (U+E0A0). Shown next to the repo folder in idle
+-- tabs; the branch value comes from the `git_branch` user var that nushell
+-- publishes via OSC 1337 SetUserVar on each prompt.
+local BRANCH_ICON = utf8.char(0xE0A0)
+
+-- Tab palette. Inactive tabs get a bg raised off the tab-bar background so they
+-- read as distinct blocks (before, inactive == bar bg, so tabs blurred into one
+-- another). A thin powerline divider between tabs guarantees separation even
+-- when two neighbours share the same state/colour.
+local ACTIVE_BG   = "#4b3f6e"   -- brightest: the focused tab
+local ACTIVE_FG   = "#ffffff"
+local INACTIVE_BG = "#2c2a40"   -- raised off the bar, dimmer than active
+local INACTIVE_FG = "#a6accd"
+local TABBAR_BG   = "#1e1e2e"   -- matches config.colors.tab_bar.background
+local SEP_ICON    = utf8.char(0xE0B1)  --  thin right divider
+local SEP_FG      = "#6c7086"
+
 wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     local pane = tab.active_pane
     if not pane then return {} end
     local state = agent_deck.get_agent_state(pane.pane_id)
 
-    local bg = tab.is_active and "#3b3052" or "#1e1e2e"
-    local fg = tab.is_active and "#ffffff" or "#c0c0c0"
+    local bg = tab.is_active and ACTIVE_BG or INACTIVE_BG
+    local fg = tab.is_active and ACTIVE_FG or INACTIVE_FG
 
     local elements = {}
     local reserved = 0
@@ -584,16 +601,23 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     elseif tab.tab_title and #tab.tab_title > 0 then
         title = tab.tab_title
     else
-        title = cwd_basename(pane)
-        if not title or #title == 0 then
+        local dir = cwd_basename(pane)
+        if dir then
+            local branch = pane.user_vars and pane.user_vars.git_branch
+            if branch and #branch > 0 then
+                title = dir .. " " .. BRANCH_ICON .. " " .. branch
+            else
+                title = dir
+            end
+        else
             title = pane.title
-        end
-        if not title or #title == 0 then
-            title = pane.foreground_process_name:match("([^/\\]+)$") or "shell"
+            if not title or #title == 0 then
+                title = pane.foreground_process_name:match("([^/\\]+)$") or "shell"
+            end
         end
     end
 
-    local avail = math.max(max_width - reserved - 2, 6)
+    local avail = math.max(max_width - reserved - 3, 6)  -- -3: two pad spaces + divider
     if #title > avail then
         title = title:sub(1, avail - 1) .. "…"
     end
@@ -601,6 +625,20 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     table.insert(elements, { Background = { Color = bg } })
     table.insert(elements, { Foreground = { Color = fg } })
     table.insert(elements, { Text = " " .. title .. " " })
+
+    -- Thin divider between this tab and the next, so two tabs never look like
+    -- one. Painted with the *next* tab's bg so it sits flush against it.
+    local next_bg = TABBAR_BG
+    for i, t in ipairs(tabs) do
+        if t.tab_index == tab.tab_index then
+            local nt = tabs[i + 1]
+            if nt then next_bg = nt.is_active and ACTIVE_BG or INACTIVE_BG end
+            break
+        end
+    end
+    table.insert(elements, { Background = { Color = next_bg } })
+    table.insert(elements, { Foreground = { Color = SEP_FG } })
+    table.insert(elements, { Text = SEP_ICON })
 
     return elements
 end)
