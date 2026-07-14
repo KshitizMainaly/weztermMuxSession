@@ -593,6 +593,10 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
         custom_text, custom_ts = nil, nil
     end
 
+    -- Width budget for the title text, measured in display *cells* (not bytes).
+    -- -3 covers the two padding spaces and the trailing divider added below.
+    local avail = math.max(max_width - reserved - 3, 6)
+
     local title
     if tab.tab_title and #tab.tab_title > 0 and rename_ts >= (custom_ts or 0) then
         title = tab.tab_title
@@ -605,7 +609,15 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
         if dir then
             local branch = pane.user_vars and pane.user_vars.git_branch
             if branch and #branch > 0 then
-                title = dir .. " " .. BRANCH_ICON .. " " .. branch
+                -- Keep the branch readable: when folder + branch is wider than
+                -- the tab, trim the *folder* (left) and leave the branch intact,
+                -- instead of letting the branch fall off the right edge.
+                local suffix = " " .. BRANCH_ICON .. " " .. branch
+                local dir_budget = math.max(avail - wezterm.column_width(suffix), 3)
+                if wezterm.column_width(dir) > dir_budget then
+                    dir = wezterm.truncate_right(dir, dir_budget - 1) .. "…"
+                end
+                title = dir .. suffix
             else
                 title = dir
             end
@@ -617,9 +629,12 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
         end
     end
 
-    local avail = math.max(max_width - reserved - 3, 6)  -- -3: two pad spaces + divider
-    if #title > avail then
-        title = title:sub(1, avail - 1) .. "…"
+    -- Final safety net for every other title source (renames, agent/OpenCode
+    -- status, process names). Truncate by display width on a codepoint boundary
+    -- so multi-byte glyphs (branch icon, box-drawing) are never sliced
+    -- mid-character — a byte-wise cut renders as a broken box and looks clipped.
+    if wezterm.column_width(title) > avail then
+        title = wezterm.truncate_right(title, avail - 1) .. "…"
     end
 
     table.insert(elements, { Background = { Color = bg } })
