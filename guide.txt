@@ -11,9 +11,9 @@ full WezTerm close. "Session" and "workspace" are the same thing.
 
 Daily use:
   Leader + a   create or switch to a named session (blank name = "default")
-  Leader + w   launcher listing every session (all persistent) — Enter to
-               switch, or type a new name to create one
-  Leader + '   Session Manager: create / switch / rename / delete
+  Leader + w   toggle back to your previous session (bounce between two)
+  Leader + '   session hub: pick a session to switch instantly; create and
+               manage (rename / delete) live behind their own entries
   Leader + d   close the current tab (its session stays on the server)
   Leader + g   delete a tracked session
 
