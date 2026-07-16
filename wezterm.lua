@@ -192,18 +192,19 @@ end
 -- =========================
 -- Performance & Memory
 -- =========================
-config.front_end = "WebGpu"
-config.webgpu_power_preference = "HighPerformance" -- dedicated GTX 1650
-config.max_fps = 120                          -- buttery smooth (matches high refresh monitors)
-config.animation_fps = 30                     -- smooth but stable for TUI redraws
-config.cursor_blink_rate = 500                -- 500ms blink interval (standard smooth blink)
-config.scrollback_lines = 2000               -- cap scrollback buffer (default 3500)
-config.enable_scroll_bar = false             -- no scroll bar widget
-config.check_for_updates = false             -- no background update checks
-config.status_update_interval = 1000         -- status bar update every second (for clock)
-config.unicode_version = 14                  -- avoid expensive unicode lookups
-config.tab_max_width = 48                    -- room for agent status + repo  branch
-config.clean_exit_codes = { 130 }            -- clean exit on Ctrl+C
+config.front_end = "OpenGL"
+config.max_fps = 60
+config.animation_fps = 60
+config.cursor_blink_rate = 500
+config.scrollback_lines = 2000
+config.enable_scroll_bar = false
+config.check_for_updates = false
+config.status_update_interval = 5000
+config.unicode_version = 14
+config.tab_max_width = 48
+config.clean_exit_codes = { 130 }
+config.freetype_load_target = "Light"
+config.freetype_render_target = "HorizontalLcd"
 --ssh alltop wezterm multiplexing
 config.ssh_domains = {
   {
@@ -256,12 +257,8 @@ config.text_background_opacity = 1.0
 -- [UNIQUE/PIXEL]   : "Monoid Nerd Font", "Agave Nerd Font", "DaddyTimeMono Nerd Font"
 -- [FUNKY/CARTOON]  : "ComicShannsMono Nerd Font", "Comic Sans MS"
 config.font = wezterm.font_with_fallback({
-    -- "DaddyTimeMono Nerd Font",
---    "ComicShannsMono Nerd Font",
-"Monoid Nerd Font",
-"ComicShannsMono Nerd Font",
+    "Monoid Nerd Font",
     "JetBrainsMono NF",
-    "Iosevka Nerd Font",
 })
 config.font_size = 12
 -- config.font_size = 15
@@ -276,16 +273,16 @@ config.font_size = 12
 -- rose-pine-moon // this one is also beautiful
 config.color_scheme = "rose-pine-moon"
 config.window_padding = {
-    left = 25,
-    right = 25,
-    top = 25,
-    bottom = 25,
+    left = 8,
+    right = 8,
+    top = 8,
+    bottom = 8,
 }
 config.window_frame = {
-    border_left_width = "0.4cell",
-    border_right_width = "0.4cell",
-    border_bottom_height = "0.15cell",
-    border_top_height = "0.15cell",
+    border_left_width = "0.2cell",
+    border_right_width = "0.2cell",
+    border_bottom_height = "0.1cell",
+    border_top_height = "0.1cell",
     inactive_titlebar_bg = "#1e1e2e",
     active_titlebar_bg = "#1e1e2e",
     inactive_titlebar_fg = "#cdd6f4",
@@ -365,19 +362,6 @@ config.keys = {
         end
     end)},
     -- Close all tabs in CURRENT workspace (with prompt)
-    { mods = "LEADER", key = "q", action = wezterm.action_callback(function(window, pane)
-        local ws = window:active_workspace()
-        window:perform_action(act.InputSelector {
-            title = "Close workspace: " .. ws,
-            choices = {
-                { id = "yes", label = "󰄬  Yes, close all tabs in " .. ws },
-                { id = "no",  label = "󰅖  Cancel" },
-            },
-            action = wezterm.action_callback(function(_, _, id)
-                if id == "yes" then close_workspace_tabs(window, ws) end
-            end),
-        }, pane)
-    end)},
     { mods = "LEADER",       key = "t", action = act.ShowTabNavigator },
     { mods = "LEADER",       key = "p", action = act.ActivateCommandPalette },
     { mods = "LEADER",       key = "\\", action = act.SplitHorizontal({ domain = "CurrentPaneDomain" }) },
@@ -480,87 +464,6 @@ config.keys = {
                 pane
             )
         end
-    end)},
-    -- Session hub: pick a session to switch INSTANTLY; create + manage
-    -- (rename/delete) live behind their own entries so switching stays one step.
-    { mods = "LEADER", key = "'", action = wezterm.action_callback(function(window, pane)
-        local current = window:active_workspace()
-        local choices = {
-            { id = "\1new",    label = "＋  Create new session…" },
-            { id = "\1manage", label = "⚙  Manage (rename / delete)…" },
-            { id = "\1bulk", label = "🗑  Bulk delete sessions…" },
-        }
-        for _, name in ipairs(all_sessions()) do
-            local marker = (name == current) and "●  " or "   "
-            table.insert(choices, { id = name, label = marker .. name })
-        end
-        window:perform_action(act.InputSelector {
-            title = "Sessions",
-            fuzzy = true,
-            fuzzy_description = "Switch to (type to filter): ",
-            choices = choices,
-            action = wezterm.action_callback(function(window, pane, id, _label)
-                if not id then return end
-                if id == "\1new" then
-                    window:perform_action(act.PromptInputLine {
-                        description = "New session name:",
-                        action = wezterm.action_callback(function(window, pane, line)
-                            if line and #line > 0 then switch_to_session(window, pane, line) end
-                        end),
-                    }, pane)
-                    return
-                end
-                if id == "\1manage" then
-                    local mchoices = {}
-                    for _, name in ipairs(all_sessions()) do
-                        table.insert(mchoices, { id = name, label = name })
-                    end
-                    window:perform_action(act.InputSelector {
-                        title = "Manage session",
-                        fuzzy = true,
-                        fuzzy_description = "Manage (type to filter): ",
-                        choices = mchoices,
-                        action = wezterm.action_callback(function(window, pane, name, _l)
-                            if not name then return end
-                            window:perform_action(act.InputSelector {
-                                title = "Session: " .. name,
-                                choices = {
-                                    { id = "rename", label = "󰑕  Rename  " .. name },
-                                    { id = "delete", label = "󰆴  Delete  " .. name },
-                                    { id = "cancel", label = "󰅖  Cancel" },
-                                },
-                                action = wezterm.action_callback(function(window, pane, act_id, _l2)
-                                    if not act_id or act_id == "cancel" then return end
-                                    if act_id == "rename" then
-                                        window:perform_action(act.PromptInputLine {
-                                            description = "Rename '" .. name .. "' to:",
-                                            action = wezterm.action_callback(function(window, pane, line)
-                                                if not line or #line == 0 or line == name then return end
-                                                pcall(function() wezterm.mux.rename_workspace(name, line) end)
-                                                remove_session(name)
-                                                add_session(line)
-                                                notify(window, "Renamed to: " .. line)
-                                            end),
-                                        }, pane)
-                                    elseif act_id == "delete" then
-                                        if name == window:active_workspace() then
-                                            notify(window, "Can't delete the session you're in — switch away first.")
-                                            return
-                                        end
-                                        kill_session(window, name)
-                                        notify(window, "Deleted session: " .. name)
-                                    end
-                                end),
-                            }, pane)
-                        end),
-                    }, pane)
-                    return
-                end
-                if id == "\1bulk" then bulk_delete_mode(window, pane); return end
-                -- a plain session name → switch instantly
-                switch_to_session(window, pane, id)
-            end),
-        }, pane)
     end)},
 }
 -- Tabs 1-9
