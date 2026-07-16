@@ -24,7 +24,7 @@ local function prune_rename_timestamps()
             if not valid[pid] then rename_timestamps[pid] = nil end
         end
     end
-    wezterm.time.call_after(120, prune_rename_timestamps)
+    wezterm.time.call_after(300, prune_rename_timestamps)
 end
 prune_rename_timestamps()
 -- =========================
@@ -536,17 +536,36 @@ end)
 -- =========================
 -- Tab Title Formatting (agent-deck dots + OpenCode status + fallback)
 -- =========================
+-- Cache the OpenCode attention file reads so format-tab-title doesn't hit
+-- disk + parse JSON on every frame for every tab. Re-read at most once per
+-- second per pane; the attention file changes rarely so this is invisible.
+local custom_status_cache = {}
+local custom_status_cache_ts = {}
+
 local function read_custom_status(pane_id)
+    local now = os.time()
+    local entry = custom_status_cache[pane_id]
+    local last = custom_status_cache_ts[pane_id]
+    if entry and last and (now - last) < 1 then
+        return entry.text, entry.ts
+    end
     local path = wezterm.home_dir .. '/.local/state/wezterm-attention/' .. tostring(pane_id)
     local f = io.open(path, 'r')
-    if not f then return nil, nil end
+    if not f then
+        custom_status_cache[pane_id] = { text = nil, ts = nil }
+        custom_status_cache_ts[pane_id] = now
+        return nil, nil
+    end
     local content = f:read('*a')
     f:close()
     local ok, decoded = pcall(wezterm.json_parse, content)
+    local text, ts
     if ok and decoded and decoded.text then
-        return decoded.text, (decoded.timestamp or 0) / 1000
+        text, ts = decoded.text, (decoded.timestamp or 0) / 1000
     end
-    return nil, nil
+    custom_status_cache[pane_id] = { text = text, ts = ts }
+    custom_status_cache_ts[pane_id] = now
+    return text, ts
 end
 
 -- Basename of a pane's working directory (e.g. the repo/service folder).
