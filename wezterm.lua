@@ -620,25 +620,39 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     local elements = {}
     local reserved = 0
 
-    if state then
-        table.insert(elements, { Background = { Color = bg } })
-        table.insert(elements, { Foreground = { Color = agent_deck.get_status_color(state.status) } })
-        table.insert(elements, { Text = agent_deck.get_status_icon(state.status) .. " " })
-        reserved = 2
-    end
-
+    -- OpenCode is considered active if agent_deck detects it OR the attention
+    -- file was written recently by wezterm-title.js (proves OpenCode is alive
+    -- in this pane even if agent_deck misses the process on Windows).
     local custom_text, custom_ts = read_custom_status(pane.pane_id)
-    local rename_ts = rename_timestamps[pane.pane_id] or 0
-
-    -- Only trust the file-based OpenCode status while OpenCode is actually
-    -- running in this pane. agent-deck detects the process (and clears `state`
-    -- after it exits), so this mirrors how Claude's tab reacts to its process.
-    -- Once OpenCode quits, we drop the stale status file and fall back to the
-    -- normal pane title instead of freezing on the last "opencode: …" text.
-    local opencode_active = state ~= nil and state.agent_type == "opencode"
+    local opencode_active = (state ~= nil and state.agent_type == "opencode")
+       or (custom_ts ~= nil and (os.time() - custom_ts) < 15)
     if not opencode_active then
         custom_text, custom_ts = nil, nil
     end
+
+    -- "opencode: idle" / "opencode: starting" aren't useful as a tab title;
+    -- fall back to directory+branch in those cases.
+    if custom_text == "opencode: idle" or custom_text == "opencode: starting" then
+        custom_text = nil
+    end
+
+    -- Synthesize an agent state for the icon when agent_deck missed detection
+    -- but we know OpenCode is active via the fresh attention file. This ensures
+    -- the agent_deck ●/◔/○ icon always renders for OpenCode panes.
+    local effective_state = state
+    if not effective_state and opencode_active then
+        local st = custom_text and "working" or "idle"
+        effective_state = { agent_type = "opencode", status = st }
+    end
+
+    if effective_state then
+        table.insert(elements, { Background = { Color = bg } })
+        table.insert(elements, { Foreground = { Color = agent_deck.get_status_color(effective_state.status) } })
+        table.insert(elements, { Text = agent_deck.get_status_icon(effective_state.status) .. " " })
+        reserved = 2
+    end
+
+    local rename_ts = rename_timestamps[pane.pane_id] or 0
 
     -- Width budget for the title text, measured in display *cells* (not bytes).
     -- -3 covers the two padding spaces and the trailing divider added below.
