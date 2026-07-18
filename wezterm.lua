@@ -601,36 +601,64 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     local elements = {}
     local reserved = 0
 
-    -- Read OpenCode status from WezTerm user var (set via OSC 1337 by plugin).
-    -- No file I/O — the plugin writes \x1b]1337;SetUserVar=opencode_status=...\x07
-    -- and WezTerm stores it synchronously in pane.user_vars.
-    local custom_text = pane.user_vars and pane.user_vars.opencode_status
+    -- Agent-agnostic detection: check user vars from any known agent.
+    -- Any agent that writes ]1337;SetUserVar=<name>_status=...
+    -- will have its title shown here automatically.
+    local agent_user_vars = {
+        "opencode_status", "claude_status", "mimo_status",
+        "codex_status", "aider_status", "gemini_status",
+    }
+    local custom_text = nil
+    local detected_agent = nil
 
-    -- Detect OpenCode via three sources (most → least reliable):
-    --   1. agent_deck process detection (polls every 2s, may lag on fresh tabs)
-    --   2. OSC user var set by the plugin (only after first tool call)
-    --   3. Foreground process name contains "opencode" (instant, no lag)
-    local fg_proc = pane.foreground_process_name or ""
-    local fg_match = fg_proc:lower():find("opencode") ~= nil
-    local opencode_active = (state ~= nil and state.agent_type == "opencode")
-       or (custom_text ~= nil and #custom_text > 0)
-       or fg_match
-    if not opencode_active then
-        custom_text = nil
+    -- Source 1: agent_deck process detection (polls every 2s)
+    if state then
+        detected_agent = state.agent_type
     end
 
-    -- "idle" / "starting" aren't useful as a tab title;
-    -- fall back to directory+branch in those cases.
+    -- Source 2: OSC user vars set by agent plugins
+    if not custom_text then
+        for _, var in ipairs(agent_user_vars) do
+            local val = pane.user_vars and pane.user_vars[var]
+            if val and #val > 0 then
+                custom_text = val
+                if not detected_agent then
+                    detected_agent = var:gsub("_status$", "")
+                end
+                break
+            end
+        end
+    end
+
+    -- Source 3: foreground process name (instant, no lag)
+    local fg_proc = (pane.foreground_process_name or ""):lower()
+    local known_agents = {
+        { pattern = "opencode",  name = "opencode" },
+        { pattern = "claude",    name = "claude" },
+        { pattern = "mimo",      name = "mimo" },
+        { pattern = "codex",     name = "codex" },
+        { pattern = "aider",     name = "aider" },
+        { pattern = "gemini",    name = "gemini" },
+    }
+    if not detected_agent then
+        for _, agent in ipairs(known_agents) do
+            if fg_proc:find(agent.pattern) then
+                detected_agent = agent.name
+                break
+            end
+        end
+    end
+
+    -- Filter out unhelpful titles
     if custom_text == "idle" or custom_text == "starting" then
         custom_text = nil
     end
 
-    -- Synthesize an agent state for the icon when agent_deck missed detection
-    -- but we know OpenCode is active via user var or process name.
+    -- Synthesize agent state for the icon when agent_deck missed detection
     local effective_state = state
-    if not effective_state and opencode_active then
+    if not effective_state and detected_agent then
         local st = custom_text and "working" or "idle"
-        effective_state = { agent_type = "opencode", status = st }
+        effective_state = { agent_type = detected_agent, status = st }
     end
 
     if effective_state then
