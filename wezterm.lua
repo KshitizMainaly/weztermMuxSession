@@ -175,10 +175,10 @@ config.front_end = "OpenGL"
 config.max_fps = 60
 config.animation_fps = 60
 config.cursor_blink_rate = 500
-config.scrollback_lines = 1000
+config.scrollback_lines = 10000
 config.enable_scroll_bar = false
 config.check_for_updates = false
-config.status_update_interval = 5000
+config.status_update_interval = 2000
 config.unicode_version = 14
 config.tab_max_width = 48
 config.clean_exit_codes = {}
@@ -489,8 +489,7 @@ config.quick_select_patterns = {
 -- =========================
 -- Window Close Confirmation
 -- =========================
-config.window_close_confirmation = "AlwaysPrompt"
-config.skip_close_confirmation_for_processes_named = {} -- empty = always confirm
+config.window_close_confirmation = "NeverPrompt"
 -- =========================
 -- Alt as Meta (better vim/terminal compatibility)
 -- =========================
@@ -500,15 +499,10 @@ config.send_composed_key_when_right_alt_is_pressed = false
 -- Right Status Bar (date/time + hostname)
 -- =========================
 wezterm.on("update-right-status", function(window, pane)
-    local date = wezterm.strftime("%Y-%m-%d %H:%M")
-    local hostname = wezterm.hostname()
-    local workspace = window:active_workspace()
-    local status = ""
-    if workspace and #workspace > 0 then
-        status = workspace .. " | "
-    end
+    local time = wezterm.strftime("%H:%M")
     window:set_right_status(wezterm.format({
-        { Text = status .. hostname .. " | " .. date },
+        { Foreground = { Color = "#6c7086" } },
+        { Text = " " .. time .. " " },
     }))
 end)
 -- =========================
