@@ -272,7 +272,7 @@ config.font_size = 12
 -- "Yorumi", "Miku (Gogh)", "Evangelion-01 (Gogh)", "Neon (Gogh)"
 -- Full Gallery: https://wezfurlong.org/wezterm/colorschemes/index.html
 -- rose-pine-moon // this one is also beautiful
-config.color_scheme = "rose-pine-moon"
+if not saved_theme then config.color_scheme = "rose-pine-moon" end
 config.window_padding = {
     left = 8,
     right = 8,
