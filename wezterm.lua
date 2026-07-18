@@ -383,23 +383,41 @@ config.keys = {
         title = "Theme Picker",
         alphabet = "abcdefghijklmnopqrstuvwxyz",
         choices = {
-            { label = "rose-pine-moon" },
+            -- Catppuccin
             { label = "Catppuccin Mocha" },
             { label = "Catppuccin Macchiato" },
+            { label = "Catppuccin Frappe" },
+            -- Tokyo Night
             { label = "Tokyo Night" },
+            { label = "Tokyo Night Storm" },
+            -- Retro / Synthwave
             { label = "Dracula" },
+            { label = "Dracula (Gogh)" },
+            { label = "Cyberpunk (Gogh)" },
+            -- Earthy / Warm
+            { label = "Gruvbox Dark (Gogh)" },
             { label = "Kanagawa" },
+            { label = "Monokai Pro" },
+            -- Cool / Blue
             { label = "Nord" },
             { label = "One Dark (Gogh)" },
-            { label = "Gruvbox Dark (Gogh)" },
-            { label = "Monokai Pro" },
-            { label = "Ayu Dark" },
+            { label = "Night Owl" },
+            { label = "One Half Dark" },
+            -- Pine / Green
+            { label = "rose-pine-moon" },
+            { label = "Vesper" },
+            { label = "Miku (Gogh)" },
+            -- Minimal / Clean
             { label = "Palenight (Gogh)" },
             { label = "Espresso (Gogh)" },
-            { label = "Andromeda" },
-            { label = "Rosé Pine" },
+            { label = "Ayu Mirage (Gogh)" },
+            { label = "Horizon" },
+            -- Solarized
             { label = "Solarized Dark (Gogh)" },
-            { label = "MaterialDark" },
+            -- Fun / Unique
+            { label = "Snazzy" },
+            { label = "Adventure" },
+            { label = "MaterialPalenight" },
         },
         action = wezterm.action_callback(function(window, pane, id, label)
             if label then
