@@ -7,27 +7,6 @@ agent_deck.apply_to_config(config, {
     tab_title = { enabled = false },
 })
 -- =========================
--- Rename Timestamps (for manual rename vs auto-status priority)
--- =========================
-local rename_timestamps = {}
-local function prune_rename_timestamps()
-    local valid = {}
-    local ok, wins = pcall(function() return wezterm.mux.all_windows() end)
-    if ok and wins then
-        for _, w in ipairs(wins) do
-            for _, t in ipairs(w:tabs() or {}) do
-                local p = t:active_pane()
-                if p then valid[p:pane_id()] = true end
-            end
-        end
-        for pid in pairs(rename_timestamps) do
-            if not valid[pid] then rename_timestamps[pid] = nil end
-        end
-    end
-    wezterm.time.call_after(300, prune_rename_timestamps)
-end
-prune_rename_timestamps()
--- =========================
 -- Session Tracking (file-based, instant, no CLI needed)
 -- =========================
 local SESSIONS_FILE = wezterm.config_dir .. "/sessions.txt"
@@ -414,7 +393,6 @@ config.keys = {
         action = wezterm.action_callback(function(window, pane, line)
             if line then
                 window:active_tab():set_title(line)
-                rename_timestamps[pane:pane_id()] = os.time()
             end
         end),
     }},
@@ -536,38 +514,6 @@ end)
 -- =========================
 -- Tab Title Formatting (agent-deck dots + OpenCode status + fallback)
 -- =========================
--- Cache the OpenCode attention file reads so format-tab-title doesn't hit
--- disk + parse JSON on every frame for every tab. Re-read at most once per
--- second per pane; the attention file changes rarely so this is invisible.
-local custom_status_cache = {}
-local custom_status_cache_ts = {}
-
-local function read_custom_status(pane_id)
-    local now = os.time()
-    local entry = custom_status_cache[pane_id]
-    local last = custom_status_cache_ts[pane_id]
-    if entry and last and (now - last) < 1 then
-        return entry.text, entry.ts
-    end
-    local path = wezterm.home_dir .. '/.local/state/wezterm-attention/' .. tostring(pane_id)
-    local f = io.open(path, 'r')
-    if not f then
-        custom_status_cache[pane_id] = { text = nil, ts = nil }
-        custom_status_cache_ts[pane_id] = now
-        return nil, nil
-    end
-    local content = f:read('*a')
-    f:close()
-    local ok, decoded = pcall(wezterm.json_parse, content)
-    local text, ts
-    if ok and decoded and decoded.text then
-        text, ts = decoded.text, (decoded.timestamp or 0) / 1000
-    end
-    custom_status_cache[pane_id] = { text = text, ts = ts }
-    custom_status_cache_ts[pane_id] = now
-    return text, ts
-end
-
 -- Basename of a pane's working directory (e.g. the repo/service folder).
 -- Handy fallback title when no agent is running: tells you *where* the tab is
 -- sitting instead of showing raw shell/command noise. Requires OSC 7 (shell
@@ -620,19 +566,19 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     local elements = {}
     local reserved = 0
 
-    -- OpenCode is considered active if agent_deck detects it OR the attention
-    -- file was written recently by wezterm-title.js (proves OpenCode is alive
-    -- in this pane even if agent_deck misses the process on Windows).
-    local custom_text, custom_ts = read_custom_status(pane.pane_id)
+    -- Read OpenCode status from WezTerm user var (set via OSC 1337 by plugin).
+    -- No file I/O — the plugin writes \x1b]1337;SetUserVar=opencode_status=...\x07
+    -- and WezTerm stores it synchronously in pane.user_vars.
+    local custom_text = pane.user_vars and pane.user_vars.opencode_status
     local opencode_active = (state ~= nil and state.agent_type == "opencode")
-       or (custom_ts ~= nil and (os.time() - custom_ts) < 15)
+       or (custom_text ~= nil and #custom_text > 0)
     if not opencode_active then
-        custom_text, custom_ts = nil, nil
+        custom_text = nil
     end
 
-    -- "opencode: idle" / "opencode: starting" aren't useful as a tab title;
+    -- "idle" / "starting" aren't useful as a tab title;
     -- fall back to directory+branch in those cases.
-    if custom_text == "opencode: idle" or custom_text == "opencode: starting" then
+    if custom_text == "idle" or custom_text == "starting" then
         custom_text = nil
     end
 
@@ -658,7 +604,7 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
 
     local title
     if custom_text then
-        title = custom_text:gsub("^opencode: ", "")
+        title = custom_text
     elseif tab.tab_title and #tab.tab_title > 0 then
         title = tab.tab_title
     else
