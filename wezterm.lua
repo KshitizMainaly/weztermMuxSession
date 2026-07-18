@@ -2,6 +2,28 @@ local wezterm = require("wezterm")
 local act = wezterm.action
 local agent_deck = wezterm.plugin.require("https://github.com/Eric162/wezterm-agent-deck")
 local config = wezterm.config_builder()
+
+-- Theme persistence: save/restore across restarts
+local THEME_FILE = wezterm.config_dir .. "/theme.txt"
+local function read_saved_theme()
+    local f = io.open(THEME_FILE, "r")
+    if f then
+        local theme = f:read("*a"):gsub("%s+$", "")
+        f:close()
+        if #theme > 0 then return theme end
+    end
+    return nil
+end
+local function save_theme(name)
+    local f = io.open(THEME_FILE, "w")
+    if f then f:write(name); f:close() end
+end
+
+-- Apply saved theme on startup
+local saved_theme = read_saved_theme()
+if saved_theme then
+    config.color_scheme = saved_theme
+end
 agent_deck.apply_to_config(config, {
     notifications = { enabled = true, on_waiting = true },
     tab_title = { enabled = false },
@@ -384,6 +406,7 @@ config.keys = {
                 local overrides = window:get_config_overrides() or {}
                 overrides.color_scheme = label
                 window:set_config_overrides(overrides)
+                save_theme(label)
             end
         end),
     }},
