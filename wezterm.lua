@@ -564,8 +564,16 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     -- No file I/O — the plugin writes \x1b]1337;SetUserVar=opencode_status=...\x07
     -- and WezTerm stores it synchronously in pane.user_vars.
     local custom_text = pane.user_vars and pane.user_vars.opencode_status
+
+    -- Detect OpenCode via three sources (most → least reliable):
+    --   1. agent_deck process detection (polls every 2s, may lag on fresh tabs)
+    --   2. OSC user var set by the plugin (only after first tool call)
+    --   3. Foreground process name contains "opencode" (instant, no lag)
+    local fg_proc = pane.foreground_process_name or ""
+    local fg_match = fg_proc:lower():find("opencode") ~= nil
     local opencode_active = (state ~= nil and state.agent_type == "opencode")
        or (custom_text ~= nil and #custom_text > 0)
+       or fg_match
     if not opencode_active then
         custom_text = nil
     end
@@ -577,8 +585,7 @@ wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
     end
 
     -- Synthesize an agent state for the icon when agent_deck missed detection
-    -- but we know OpenCode is active via the fresh attention file. This ensures
-    -- the agent_deck ●/◔/○ icon always renders for OpenCode panes.
+    -- but we know OpenCode is active via user var or process name.
     local effective_state = state
     if not effective_state and opencode_active then
         local st = custom_text and "working" or "idle"
