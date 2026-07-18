@@ -411,13 +411,13 @@ config.keys = {
             { label = "Palenight (Gogh)" },
             { label = "Espresso (Gogh)" },
             { label = "Ayu Mirage (Gogh)" },
-            { label = "Horizon" },
+            { label = "Horizon Night" },
             -- Solarized
             { label = "Solarized Dark (Gogh)" },
             -- Fun / Unique
             { label = "Snazzy" },
-            { label = "Adventure" },
-            { label = "MaterialPalenight" },
+            { label = "Soft Era" },
+            { label = "Material Palenight" },
         },
         action = wezterm.action_callback(function(window, pane, id, label)
             if label then
