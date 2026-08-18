@@ -1,6 +1,5 @@
 local wezterm = require("wezterm")
 local act = wezterm.action
-local agent_deck = wezterm.plugin.require("https://github.com/Eric162/wezterm-agent-deck")
 local config = wezterm.config_builder()
 
 -- Theme persistence: save/restore across restarts
@@ -24,10 +23,7 @@ local saved_theme = read_saved_theme()
 if saved_theme then
     config.color_scheme = saved_theme
 end
-agent_deck.apply_to_config(config, {
-    notifications = { enabled = true, on_waiting = true },
-    tab_title = { enabled = false },
-})
+
 -- =========================
 -- Session Tracking (file-based, instant, no CLI needed)
 -- =========================
@@ -196,7 +192,7 @@ end
 config.front_end = "OpenGL"
 config.max_fps = 60
 config.animation_fps = 60
-config.cursor_blink_rate = 500
+config.cursor_blink_rate = 0
 config.scrollback_lines = 10000
 config.enable_scroll_bar = false
 config.check_for_updates = false
@@ -568,189 +564,5 @@ wezterm.on("update-right-status", function(window, pane)
         { Foreground = { Color = "#6c7086" } },
         { Text = " " .. time .. " " },
     }))
-end)
--- =========================
--- Tab Title Formatting (agent-deck dots + OpenCode status + fallback)
--- =========================
--- Basename of a pane's working directory (e.g. the repo/service folder).
--- Handy fallback title when no agent is running: tells you *where* the tab is
--- sitting instead of showing raw shell/command noise. Requires OSC 7 (shell
--- integration) to report the cwd; returns nil if unavailable.
-local function cwd_basename(pane)
-    local cwd = pane.current_working_dir
-    if not cwd then return nil end
-    local path
-    local ok = pcall(function() path = cwd.file_path end)  -- newer wezterm: Url object
-    if not ok or not path or #path == 0 then
-        path = tostring(cwd):gsub("^file://[^/]*", "")     -- fallback: file://host/path
-    end
-    path = path
-        :gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end)  -- url-decode
-        :gsub("[/\\]+$", "")                                                    -- trim trailing slash
-    local base = path:match("([^/\\]+)$")
-    if base and #base > 0 then return base end
-    return nil
-end
-
--- Nerd Font git-branch glyph (U+E0A0). Shown next to the repo folder in idle
--- tabs; the branch value comes from the `git_branch` user var that nushell
--- publishes via OSC 1337 SetUserVar on each prompt.
-local BRANCH_ICON = utf8.char(0xE0A0)
-
--- Tab palette. Inactive tabs get a bg raised off the tab-bar background so they
--- read as distinct blocks (before, inactive == bar bg, so tabs blurred into one
--- another). A thin powerline divider between tabs guarantees separation even
--- when two neighbours share the same state/colour.
-local ACTIVE_BG   = "#4b3f6e"   -- brightest: the focused tab
-local ACTIVE_FG   = "#ffffff"
-local INACTIVE_BG = "#2c2a40"   -- raised off the bar, dimmer than active
-local INACTIVE_FG = "#a6accd"
-local TABBAR_BG   = "#1e1e2e"   -- matches config.colors.tab_bar.background
--- Divider between tabs. Bright gold so each tab boundary is obvious at a
--- glance. Swap SEP_ICON for a different shape if you like:
---   0xE0B1 ""  thin chevron (current)   0xE0B0 ""  solid arrow (bold)
---   0x2503 "┃"  heavy bar               0x2502 "│"  light bar
-local SEP_ICON    = utf8.char(0xE0B1)  --  thin right divider
-local SEP_FG      = "#f6c177"           -- gold — high contrast vs the dark tab bar
-
-wezterm.on("format-tab-title", function(tab, tabs, panes, cfg, hover, max_width)
-    local pane = tab.active_pane
-    if not pane then return {} end
-    local state = agent_deck.get_agent_state(pane.pane_id)
-
-    local bg = tab.is_active and ACTIVE_BG or INACTIVE_BG
-    local fg = tab.is_active and ACTIVE_FG or INACTIVE_FG
-
-    local elements = {}
-    local reserved = 0
-
-    -- Agent-agnostic detection: check user vars from any known agent.
-    -- Any agent that writes ]1337;SetUserVar=<name>_status=...
-    -- will have its title shown here automatically.
-    local agent_user_vars = {
-        "opencode_status", "claude_status", "mimo_status",
-        "codex_status", "aider_status", "gemini_status",
-    }
-    local custom_text = nil
-    local detected_agent = nil
-
-    -- Source 1: agent_deck process detection (polls every 2s)
-    if state then
-        detected_agent = state.agent_type
-    end
-
-    -- Source 2: OSC user vars set by agent plugins
-    if not custom_text then
-        for _, var in ipairs(agent_user_vars) do
-            local val = pane.user_vars and pane.user_vars[var]
-            if val and #val > 0 then
-                custom_text = val
-                if not detected_agent then
-                    detected_agent = var:gsub("_status$", "")
-                end
-                break
-            end
-        end
-    end
-
-    -- Source 3: foreground process name (instant, no lag)
-    local fg_proc = (pane.foreground_process_name or ""):lower()
-    local known_agents = {
-        { pattern = "opencode",  name = "opencode" },
-        { pattern = "claude",    name = "claude" },
-        { pattern = "mimo",      name = "mimo" },
-        { pattern = "codex",     name = "codex" },
-        { pattern = "aider",     name = "aider" },
-        { pattern = "gemini",    name = "gemini" },
-    }
-    if not detected_agent then
-        for _, agent in ipairs(known_agents) do
-            if fg_proc:find(agent.pattern) then
-                detected_agent = agent.name
-                break
-            end
-        end
-    end
-
-    -- Filter out unhelpful titles
-    if custom_text == "idle" or custom_text == "starting" then
-        custom_text = nil
-    end
-
-    -- Synthesize agent state for the icon when agent_deck missed detection
-    local effective_state = state
-    if not effective_state and detected_agent then
-        local st = custom_text and "working" or "idle"
-        effective_state = { agent_type = detected_agent, status = st }
-    end
-
-    if effective_state then
-        table.insert(elements, { Background = { Color = bg } })
-        table.insert(elements, { Foreground = { Color = agent_deck.get_status_color(effective_state.status) } })
-        table.insert(elements, { Text = agent_deck.get_status_icon(effective_state.status) .. " " })
-        reserved = 2
-    end
-
-    -- Width budget for the title text, measured in display *cells* (not bytes).
-    -- -3 covers the two padding spaces and the trailing divider added below.
-    local avail = math.max(max_width - reserved - 3, 6)
-
-    local title
-    if custom_text then
-        title = custom_text
-    elseif tab.tab_title and #tab.tab_title > 0 then
-        title = tab.tab_title
-    else
-        local dir = cwd_basename(pane)
-        if dir then
-            local branch = pane.user_vars and pane.user_vars.git_branch
-            if branch and #branch > 0 then
-                -- Keep the branch readable: when folder + branch is wider than
-                -- the tab, trim the *folder* (left) and leave the branch intact,
-                -- instead of letting the branch fall off the right edge.
-                local suffix = " " .. BRANCH_ICON .. " " .. branch
-                local dir_budget = math.max(avail - wezterm.column_width(suffix), 3)
-                if wezterm.column_width(dir) > dir_budget then
-                    dir = wezterm.truncate_right(dir, dir_budget - 1) .. "…"
-                end
-                title = dir .. suffix
-            else
-                title = dir
-            end
-        else
-            title = pane.title
-            if not title or #title == 0 then
-                title = pane.foreground_process_name:match("([^/\\]+)$") or "shell"
-            end
-        end
-    end
-
-    -- Final safety net for every other title source (renames, agent/OpenCode
-    -- status, process names). Truncate by display width on a codepoint boundary
-    -- so multi-byte glyphs (branch icon, box-drawing) are never sliced
-    -- mid-character — a byte-wise cut renders as a broken box and looks clipped.
-    if wezterm.column_width(title) > avail then
-        title = wezterm.truncate_right(title, avail - 1) .. "…"
-    end
-
-    table.insert(elements, { Background = { Color = bg } })
-    table.insert(elements, { Foreground = { Color = fg } })
-    table.insert(elements, { Text = " " .. title .. " " })
-
-    -- Thin divider between this tab and the next, so two tabs never look like
-    -- one. Painted with the *next* tab's bg so it sits flush against it.
-    local next_bg = TABBAR_BG
-    for i, t in ipairs(tabs) do
-        if t.tab_index == tab.tab_index then
-            local nt = tabs[i + 1]
-            if nt then next_bg = nt.is_active and ACTIVE_BG or INACTIVE_BG end
-            break
-        end
-    end
-    table.insert(elements, { Background = { Color = next_bg } })
-    table.insert(elements, { Foreground = { Color = SEP_FG } })
-    table.insert(elements, { Text = SEP_ICON })
-
-    return elements
 end)
 return config
