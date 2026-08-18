@@ -380,9 +380,32 @@ config.keys = {
     { mods = "CTRL|SHIFT",   key = "V", action = act.PasteFrom("Clipboard") },
     -- Theme picker
     { mods = "LEADER", key = "T", action = act.InputSelector {
-        title = "Theme Picker",
+        title = "Theme Picker (Light + Dark)",
         alphabet = "abcdefghijklmnopqrstuvwxyz",
         choices = {
+            -- ═══════════════ LIGHT THEMES ═══════════════
+            { label = "──── Light ────" },
+            { label = "Catppuccin Latte" },
+            { label = "Catppuccin Latte (Gogh)" },
+            { label = "Solarized Light (Gogh)" },
+            { label = "Gruvbox light, medium (base16)" },
+            { label = "Gruvbox light, soft (base16)" },
+            { label = "Gruvbox light, hard (base16)" },
+            { label = "One Light (Gogh)" },
+            { label = "One Light (base16)" },
+            { label = "Github (Gogh)" },
+            { label = "Tokyo Night Light (Gogh)" },
+            { label = "Rosé Pine Dawn (Gogh)" },
+            { label = "Everforest Light (Gogh)" },
+            { label = "Everforest Light Medium (Gogh)" },
+            { label = "Everforest Light Soft (Gogh)" },
+            { label = "flexoki-light" },
+            { label = "Apple System Colors" },
+            { label = "AtomOneLight" },
+            { label = "Ayu Light (Gogh)" },
+            { label = "iceberg-light" },
+            -- ═══════════════ DARK THEMES ═══════════════
+            { label = "──── Dark ────" },
             -- Catppuccin
             { label = "Catppuccin Mocha" },
             { label = "Catppuccin Macchiato" },
