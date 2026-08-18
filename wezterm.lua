@@ -279,7 +279,7 @@ config.keys = {
         alphabet = "abcdefghijklmnopqrstuvwxyz",
         choices = {
             -- ═══════════════ LIGHT THEMES ═══════════════
-            { label = "──── Light ────" },
+            { label = "─── Light ───", id = "__sep__" },
             { label = "Catppuccin Latte" },
             { label = "Catppuccin Latte (Gogh)" },
             { label = "Solarized Light (Gogh)" },
@@ -300,7 +300,7 @@ config.keys = {
             { label = "Ayu Light (Gogh)" },
             { label = "iceberg-light" },
             -- ═══════════════ DARK THEMES ═══════════════
-            { label = "──── Dark ────" },
+            { label = "─── Dark ───", id = "__sep__" },
             -- Catppuccin
             { label = "Catppuccin Mocha" },
             { label = "Catppuccin Macchiato" },
@@ -311,39 +311,29 @@ config.keys = {
             -- Retro / Synthwave
             { label = "Dracula" },
             { label = "Dracula (Gogh)" },
-            { label = "Cyberpunk (Gogh)" },
             -- Earthy / Warm
             { label = "Gruvbox Dark (Gogh)" },
-            { label = "Kanagawa" },
-            { label = "Monokai Pro" },
+            { label = "Kanagawa (Gogh)" },
             -- Cool / Blue
-            { label = "Nord" },
+            { label = "Nord (Gogh)" },
             { label = "One Dark (Gogh)" },
-            { label = "Night Owl" },
-            { label = "One Half Dark" },
+            { label = "Night Owl (Gogh)" },
             -- Pine / Green
             { label = "rose-pine-moon" },
-            { label = "Vesper" },
-            { label = "Miku (Gogh)" },
             -- Minimal / Clean
-            { label = "Palenight (Gogh)" },
             { label = "Espresso (Gogh)" },
             { label = "Ayu Mirage (Gogh)" },
-            { label = "Horizon Night" },
             -- Solarized
             { label = "Solarized Dark (Gogh)" },
             -- Fun / Unique
             { label = "Snazzy" },
-            { label = "Soft Era" },
-            { label = "Material Palenight" },
         },
         action = wezterm.action_callback(function(window, pane, id, label)
-            if label then
-                local overrides = window:get_config_overrides() or {}
-                overrides.color_scheme = label
-                window:set_config_overrides(overrides)
-                save_theme(label)
-            end
+            if not label or id == "__sep__" then return end
+            local overrides = window:get_config_overrides() or {}
+            overrides.color_scheme = label
+            window:set_config_overrides(overrides)
+            save_theme(label)
         end),
     }},
     -- Rename tab
@@ -436,7 +426,7 @@ config.quick_select_patterns = {
 -- =========================
 -- Window Close Confirmation
 -- =========================
-config.window_close_confirmation = "SmartPrompt"
+config.window_close_confirmation = "NeverPrompt"
 -- =========================
 -- Alt as Meta (better vim/terminal compatibility)
 -- =========================
