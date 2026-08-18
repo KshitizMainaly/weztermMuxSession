@@ -7,9 +7,10 @@ local THEME_FILE = wezterm.config_dir .. "/theme.txt"
 local function read_saved_theme()
     local f = io.open(THEME_FILE, "r")
     if f then
-        local theme = f:read("*a"):gsub("%s+$", "")
+        local theme = f:read("*a")
+        if theme then theme = theme:gsub("%s+$", "") end
         f:close()
-        if #theme > 0 then return theme end
+        if theme and #theme > 0 then return theme end
     end
     return nil
 end
@@ -125,67 +126,6 @@ local function kill_session(window, name)
     remove_session(name)
 end
 
-local function bulk_delete_mode(window, pane)
-    local marked = {}; local marked_count = 0
-
-    local function show_bulk()
-        local choices = {}
-        table.insert(choices, { id = "\1del", label = "✓  Delete marked (" .. marked_count .. ")" })
-        table.insert(choices, { id = "\1cancel", label = "✗  Cancel" })
-        table.insert(choices, { id = "\1sep", label = "─── toggle sessions ───" })
-
-        local current = window:active_workspace()
-        for _, name in ipairs(all_sessions()) do
-            if name ~= current then
-                local marker = marked[name] and "☑  " or "☐  "
-                table.insert(choices, { id = name, label = marker .. name })
-            end
-        end
-
-        window:perform_action(act.InputSelector {
-            title = "Bulk delete — select sessions to mark",
-            fuzzy = true,
-            fuzzy_description = "Mark sessions to delete: ",
-            choices = choices,
-            action = wezterm.action_callback(function(win, pane, id, _label)
-                if not id or id == "\1cancel" then return end
-                if id == "\1sep" then show_bulk(); return end
-                if id == "\1del" then
-                    local names = {}
-                    for n in pairs(marked) do table.insert(names, n) end
-                    table.sort(names)
-                    if #names == 0 then
-                        notify(win, "No sessions marked for deletion.")
-                        show_bulk()
-                        return
-                    end
-                    win:perform_action(act.InputSelector {
-                        title = "Delete " .. #names .. " sessions?",
-                        choices = {
-                            { id = "yes", label = "󰄬  Yes, delete " .. #names .. " sessions" },
-                            { id = "no",  label = "󰅖  Cancel" },
-                        },
-                        action = wezterm.action_callback(function(win, pane, id2)
-                            if id2 == "yes" then
-                                for _, n in ipairs(names) do
-                                    kill_session(win, n)
-                                end
-                                notify(win, "Deleted " .. #names .. " sessions.")
-                            end
-                        end),
-                    }, pane)
-                    return
-                end
-                -- Toggle session
-                if marked[id] then marked[id] = nil; marked_count = marked_count - 1 else marked[id] = true; marked_count = marked_count + 1 end
-                show_bulk()
-            end),
-        }, pane)
-    end
-
-    show_bulk()
-end
-
 -- =========================
 -- Performance & Memory
 -- =========================
@@ -297,7 +237,7 @@ config.colors = {
 -- =========================
 -- Leader Key
 -- =========================
-config.leader = { key = "Space", mods = "CTRL", timeout_milliseconds = 1000 }
+config.leader = { key = "Space", mods = "CTRL", timeout_milliseconds = 500 }
 -- =========================
 -- Keybindings
 -- =========================
@@ -496,12 +436,14 @@ config.quick_select_patterns = {
 -- =========================
 -- Window Close Confirmation
 -- =========================
-config.window_close_confirmation = "NeverPrompt"
+config.window_close_confirmation = "SmartPrompt"
 -- =========================
 -- Alt as Meta (better vim/terminal compatibility)
 -- =========================
 config.send_composed_key_when_left_alt_is_pressed = false
 config.send_composed_key_when_right_alt_is_pressed = false
+config.allow_win32_input_mode = true
+config.enable_osc52 = true
 -- =========================
 -- Right Status Bar (date/time + hostname)
 -- =========================
