@@ -433,7 +433,6 @@ config.window_close_confirmation = "NeverPrompt"
 config.send_composed_key_when_left_alt_is_pressed = false
 config.send_composed_key_when_right_alt_is_pressed = false
 config.allow_win32_input_mode = true
-config.enable_osc52 = true
 -- =========================
 -- Right Status Bar (date/time + hostname)
 -- =========================
