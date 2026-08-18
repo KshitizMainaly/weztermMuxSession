@@ -193,13 +193,13 @@ config.front_end = "OpenGL"
 config.max_fps = 60
 config.animation_fps = 60
 config.cursor_blink_rate = 0
-config.scrollback_lines = 10000
+config.scrollback_lines = 5000
 config.enable_scroll_bar = false
 config.check_for_updates = false
-config.status_update_interval = 2000
-config.unicode_version = 14
+config.status_update_interval = 30000
+
 config.tab_max_width = 48
-config.clean_exit_codes = {}
+
 config.freetype_load_target = "Light"
 config.freetype_render_target = "HorizontalLcd"
 --ssh alltop wezterm multiplexing
@@ -248,26 +248,11 @@ config.default_gui_startup_args = { 'connect', 'mux' }
 config.window_decorations = "RESIZE"
 config.default_prog = { "nu" }
 config.text_background_opacity = 1.0
--- = :Curated Font List (Comment/Uncomment the ones you like):
--- [MODERN/SLIM]    : "0xProto Nerd Font Mono", "JetBrainsMono NF", "Iosevka Nerd Font"
--- [HANDWRITTEN]   : "VictorMono Nerd Font", "FantasqueSansM Nerd Font", "MonaspiceRn Nerd Font"
--- [UNIQUE/PIXEL]   : "Monoid Nerd Font", "Agave Nerd Font", "DaddyTimeMono Nerd Font"
--- [FUNKY/CARTOON]  : "ComicShannsMono Nerd Font", "Comic Sans MS"
 config.font = wezterm.font_with_fallback({
     "Monoid Nerd Font",
     "JetBrainsMono NF",
 })
 config.font_size = 12
--- config.font_size = 15
--- = :Standard Verified Themes:
--- "Dracula", "Tokyo Night", "Kanagawa", "Nord", "One Dark (Gogh)"
--- "Catppuccin Mocha", "Catppuccin Macchiato", "Rosé Pine", "Rosé Pine Moon"
--- "Gruvbox Dark (Gogh)", "Monokai Pro", "Cyberpunk (Gogh)"
--- = :Funky / Anime / Neon Themes:
--- "Aura", "Synthwave (Gogh)", "Outrun Dark", "Nightfly"
--- "Yorumi", "Miku (Gogh)", "Evangelion-01 (Gogh)", "Neon (Gogh)"
--- Full Gallery: https://wezfurlong.org/wezterm/colorschemes/index.html
--- rose-pine-moon // this one is also beautiful
 if not saved_theme then config.color_scheme = "rose-pine-moon" end
 config.window_padding = {
     left = 8,
@@ -276,10 +261,6 @@ config.window_padding = {
     bottom = 8,
 }
 config.window_frame = {
-    border_left_width = "0",
-    border_right_width = "0",
-    border_bottom_height = "0",
-    border_top_height = "0",
     inactive_titlebar_bg = "#1e1e2e",
     active_titlebar_bg = "#1e1e2e",
     inactive_titlebar_fg = "#cdd6f4",
@@ -289,30 +270,8 @@ config.hide_tab_bar_if_only_one_tab = false
 config.tab_bar_at_bottom = true
 config.use_fancy_tab_bar = false
 -- =========================
--- Background
--- =========================
--- Uncomment one background image if desired:
--- config.background = {
---     {
---         source = {
---             File = "C:/Users/kshit/.config/wezterm/background/manAuraRed.jpg" },
---         width = "100%",
---         height = "100%",
---         repeat_x = "NoRepeat",
---         repeat_y = "NoRepeat",
---         hsb = {
---             brightness = 0.7,
---             hue = 1.0,
---             saturation = 1.0,
---         },
---         attachment = "Fixed",
---     },
--- }
-
--- =========================
 -- Cursor
 -- =========================
--- cursor_blink_rate already set in Performance section above
 config.default_cursor_style = "SteadyBar"
 config.force_reverse_video_cursor = true
 -- =========================
@@ -517,19 +476,7 @@ end
 -- =========================
 config.initial_cols = 140
 config.initial_rows = 40
--- =========================
--- Visual Bell (flash instead of beep)
--- =========================
 config.audible_bell = "Disabled"
-config.visual_bell = {
-    fade_in_duration_ms = 100,
-    fade_out_duration_ms = 100,
-    target = "BackgroundColor",
-}
--- =========================
--- Font Ligatures
--- =========================
-config.harfbuzz_features = { "calt=1", "clig=1", "liga=1" }
 -- =========================
 -- Hyperlink Rules (clickable paths/URLs)
 -- =========================
