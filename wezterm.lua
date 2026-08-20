@@ -131,7 +131,7 @@ end
 -- =========================
 config.front_end = "OpenGL"
 config.max_fps = 60
-config.animation_fps = 60
+config.animation_fps = 30
 config.cursor_blink_rate = 0
 config.scrollback_lines = 5000
 config.enable_scroll_bar = false
@@ -206,7 +206,7 @@ config.window_frame = {
     inactive_titlebar_fg = "#cdd6f4",
     active_titlebar_fg = "#cdd6f4",
 }
-config.hide_tab_bar_if_only_one_tab = false
+config.hide_tab_bar_if_only_one_tab = true
 config.tab_bar_at_bottom = true
 config.use_fancy_tab_bar = false
 -- =========================
@@ -237,7 +237,7 @@ config.colors = {
 -- =========================
 -- Leader Key
 -- =========================
-config.leader = { key = "Space", mods = "CTRL", timeout_milliseconds = 500 }
+config.leader = { key = "Space", mods = "CTRL", timeout_milliseconds = 1000 }
 -- =========================
 -- Keybindings
 -- =========================
