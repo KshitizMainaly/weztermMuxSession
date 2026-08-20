@@ -129,9 +129,9 @@ end
 -- =========================
 -- Performance & Memory
 -- =========================
-config.front_end = "OpenGL"
+config.front_end = "WebGpu"
 config.max_fps = 60
-config.animation_fps = 30
+config.animation_fps = 60
 config.cursor_blink_rate = 0
 config.scrollback_lines = 5000
 config.enable_scroll_bar = false
