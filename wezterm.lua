@@ -28,7 +28,7 @@ local saved_theme = read_saved_theme()
 config.front_end = "WebGpu"
 config.webgpu_power_preference = "HighPerformance"
 config.max_fps = 120
-config.animation_fps = 1                -- kill all animations (tab transitions, cursor fade, etc.)
+config.animation_fps = 10               -- just enough for smooth tab switches; still nearly zero cost
 config.cursor_blink_rate = 0             -- no blink timer
 config.scrollback_lines = 3500          -- neovim manages its own buffer; keep this lean
 config.enable_scroll_bar = false
@@ -64,7 +64,7 @@ config.window_frame = {
     inactive_titlebar_fg = "#cdd6f4",
     active_titlebar_fg = "#cdd6f4",
 }
-config.hide_tab_bar_if_only_one_tab = true
+config.hide_tab_bar_if_only_one_tab = false  -- prevent jarring reflow when 1→2 tabs
 config.tab_bar_at_bottom = true
 config.use_fancy_tab_bar = false
 config.tab_max_width = 48
