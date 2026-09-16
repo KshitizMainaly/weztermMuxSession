@@ -23,6 +23,29 @@ end
 local saved_theme = read_saved_theme()
 
 -- =========================
+-- Clean Tab Titles (Microsecond fast, no lag)
+-- =========================
+wezterm.on("format-tab-title", function(tab, tabs, panes, config, hover, max_width)
+    -- 1. If you manually renamed the tab (Leader+r), always show that instantly
+    if tab.tab_title and #tab.tab_title > 0 then
+        return { { Text = " " .. tab.tab_title .. " " } }
+    end
+
+    -- 2. Otherwise, use the fast native title from the shell
+    local title = tab.active_pane.title or ""
+    -- If WezTerm is still loading the shell, it might say "wezterm.exe". Make it cleaner.
+    if title:find("wezterm") or title == "" then
+        title = "nu"
+    end
+
+    -- Keep it short to prevent layout recalculations
+    if #title > 20 then title = title:sub(1, 19) .. "…" end
+    
+    -- Show index + title
+    return { { Text = string.format(" %d: %s ", tab.tab_index + 1, title) } }
+end)
+
+-- =========================
 -- Performance & Rendering (tuned for Neovim)
 -- =========================
 config.front_end = "WebGpu"
