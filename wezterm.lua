@@ -99,7 +99,7 @@ config.colors = {
 -- =========================
 -- Leader Key
 -- =========================
-config.leader = { key = "Space", mods = "CTRL", timeout_milliseconds = 1000 }
+config.leader = { key = "Space", mods = "CTRL", timeout_milliseconds = 500 }
 
 -- =========================
 -- Keybindings (lean — no session/mux callbacks)
@@ -107,9 +107,9 @@ config.leader = { key = "Space", mods = "CTRL", timeout_milliseconds = 1000 }
 config.keys = {
     -- Panes
     { mods = "LEADER",       key = "s",  action = act.PaneSelect { mode = "SwapWithActive" } },
-    { mods = "LEADER",       key = "x",  action = act.CloseCurrentPane { confirm = true } },
-    { mods = "LEADER",       key = "\\", action = act.SplitHorizontal { domain = "CurrentPaneDomain" } },
-    { mods = "LEADER",       key = "-",  action = act.SplitVertical { domain = "CurrentPaneDomain" } },
+    { mods = "LEADER",       key = "x",  action = act.CloseCurrentPane { confirm = false } },
+    { mods = "LEADER",       key = "\\", action = act.SplitHorizontal { domain = "DefaultDomain" } },
+    { mods = "LEADER",       key = "-",  action = act.SplitVertical { domain = "DefaultDomain" } },
     { mods = "LEADER",       key = "h",  action = act.ActivatePaneDirection("Left") },
     { mods = "LEADER",       key = "j",  action = act.ActivatePaneDirection("Down") },
     { mods = "LEADER",       key = "k",  action = act.ActivatePaneDirection("Up") },
@@ -119,7 +119,7 @@ config.keys = {
     { mods = "LEADER|SHIFT", key = "j",  action = act.AdjustPaneSize { "Down", 22 } },
     { mods = "LEADER|SHIFT", key = "k",  action = act.AdjustPaneSize { "Up", 22 } },
     -- Tabs
-    { mods = "LEADER",       key = "c",  action = act.SpawnTab("CurrentPaneDomain") },
+    { mods = "LEADER",       key = "c",  action = act.SpawnTab("DefaultDomain") },
     { mods = "LEADER",       key = "b",  action = act.ActivateTabRelative(-1) },
     { mods = "LEADER",       key = "n",  action = act.ActivateTabRelative(1) },
     { mods = "LEADER",       key = "t",  action = act.ShowTabNavigator },
