@@ -51,12 +51,16 @@ end)
 config.front_end = "WebGpu"
 config.webgpu_power_preference = "HighPerformance"
 config.max_fps = 120
-config.animation_fps = 10               -- just enough for smooth tab switches; still nearly zero cost
+config.animation_fps = 1                -- minimum allowed; essentially disables animations
 config.cursor_blink_rate = 0             -- no blink timer
 config.scrollback_lines = 3500          -- neovim manages its own buffer; keep this lean
 config.enable_scroll_bar = false
 config.check_for_updates = false
 config.status_update_interval = 60000   -- status bar callback fires once/min instead of default 1s
+
+-- Maximize throughput
+config.mux_output_parser_coalesce_delay_ms = 0
+config.mux_output_parser_buffer_size = 100000
 
 -- Text rendering: fastest path
 config.harfbuzz_features = { 'calt=0', 'clig=0', 'liga=0' }  -- no ligature shaping
@@ -122,7 +126,7 @@ config.colors = {
 -- =========================
 -- Leader Key
 -- =========================
-config.leader = { key = "Space", mods = "CTRL", timeout_milliseconds = 500 }
+config.leader = { key = "Space", mods = "CTRL", timeout_milliseconds = 1000 }
 
 -- =========================
 -- Keybindings (lean — no session/mux callbacks)
