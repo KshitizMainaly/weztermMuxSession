@@ -57,6 +57,8 @@ config.scrollback_lines = 3500          -- neovim manages its own buffer; keep t
 config.enable_scroll_bar = false
 config.check_for_updates = false
 config.status_update_interval = 60000   -- status bar callback fires once/min instead of default 1s
+config.use_resize_increments = true     -- prevent Neovim from aggressively redrawing on smooth window resizes
+config.notification_handling = "None"   -- completely disable all desktop notifications directly in WezTerm
 
 -- Maximize throughput
 config.mux_output_parser_coalesce_delay_ms = 0
