@@ -87,6 +87,10 @@ config.font = wezterm.font("Monoid Nerd Font")   -- single font = no fallback ch
 config.font_size = 12
 config.color_scheme = saved_theme or "rose-pine-moon"
 config.window_padding = { left = 8, right = 8, top = 8, bottom = 8 }
+config.inactive_pane_hsb = {
+    saturation = 0.9,
+    brightness = 0.7,
+}
 config.window_frame = {
     inactive_titlebar_bg = "#1e1e2e",
     active_titlebar_bg = "#1e1e2e",
