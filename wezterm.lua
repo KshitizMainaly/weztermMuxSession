@@ -212,6 +212,15 @@ config.keys = {
             { id = "Ayu Mirage (Gogh)", label = "Ayu Mirage (Gogh) (Dark Blue/Orange)" },
             { id = "Solarized Dark (Gogh)", label = "Solarized Dark (Gogh) (Dark Teal)" },
             { id = "Snazzy", label = "Snazzy (Dark Gray/Cyan)" },
+            { label = "─── Vibrant / Colored ───", id = "__sep__" },
+            { id = "Cyberpunk", label = "Cyberpunk (Neon Pink/Purple)" },
+            { id = "SynthWave '84", label = "SynthWave '84 (Deep Purple/Neon)" },
+            { id = "Matrix", label = "Matrix (Pure Hacker Green)" },
+            { id = "Red Alert", label = "Red Alert (Intense Dark Red)" },
+            { id = "Firewatch", label = "Firewatch (Warm Orange/Red)" },
+            { id = "Cobalt2", label = "Cobalt2 (Deep Ocean Blue/Yellow)" },
+            { id = "Outrun Night", label = "Outrun Night (Retrowave Purple)" },
+            { id = "SeaShells", label = "SeaShells (Deep Sea Blue)" },
         },
         action = wezterm.action_callback(function(window, pane, id, label)
             if not id or id == "__sep__" then return end
